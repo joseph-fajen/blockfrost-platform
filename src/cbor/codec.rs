@@ -2,11 +2,13 @@ use pallas_codec::minicbor::{decode, Decode, Decoder};
 use pallas_primitives::{Nullable, ScriptHash};
 
 use crate::cbor::haskell_types::{
-    ApplyConwayTxPredError, ApplyTxError, ConwayUtxoPredFailure, ConwayUtxoWPredFailure, PlutusPurpose, ShelleyBasedEra, StrictMaybe, TxValidationError, Utxo
+    ApplyConwayTxPredError, ApplyTxError, ConwayUtxoPredFailure, ConwayUtxoWPredFailure,
+    PlutusPurpose, ShelleyBasedEra, StrictMaybe, TxValidationError, Utxo,
 };
 
 use super::haskell_types::{
-    ConwayCertPredFailure, ConwayCertsPredFailure, ConwayGovCertPredFailure, ConwayGovPredFailure, Credential, CustomSet258, Network, RewardAccountFielded
+    ConwayCertPredFailure, ConwayCertsPredFailure, ConwayGovCertPredFailure, ConwayGovPredFailure,
+    Credential, CustomSet258, Network, RewardAccountFielded,
 };
 
 impl<'b> Decode<'b, ()> for TxValidationError {
@@ -154,7 +156,10 @@ impl<'b> Decode<'b, ()> for ConwayGovPredFailure {
             0 => Ok(GovActionsDoNotExist(d.decode()?)),
             1 => Ok(MalformedProposal(d.decode()?)),
             2 => Ok(ProposalProcedureNetworkIdMismatch(d.decode()?, d.decode()?)),
-            3 => Ok(TreasuryWithdrawalsNetworkIdMismatch(d.decode()?, d.decode()?)),
+            3 => Ok(TreasuryWithdrawalsNetworkIdMismatch(
+                d.decode()?,
+                d.decode()?,
+            )),
             4 => Ok(ProposalDepositIncorrect(d.decode()?)),
             5 => Ok(DisallowedVoters(d.decode()?)),
             6 => Ok(ConflictingCommitteeUpdate(d.decode()?)),
@@ -167,9 +172,9 @@ impl<'b> Decode<'b, ()> for ConwayGovPredFailure {
 
             10 => Ok(ProposalCantFollow(d.decode()?)),
             11 => {
-               // let a = d.probe();
+                // let a = d.probe();
 
-               /* let arr = d.array().unwrap().unwrap_or(0);
+                /* let arr = d.array().unwrap().unwrap_or(0);
                 let b1 = d.bytes()?;
                 d.array()?;
                 let b2 = d.bytes()?;
@@ -177,19 +182,18 @@ impl<'b> Decode<'b, ()> for ConwayGovPredFailure {
 
                 use StrictMaybe::*;
 
-                let maybe_hash1: Nullable<ScriptHash> =  match d.array()? {
+                let maybe_hash1: Nullable<ScriptHash> = match d.array()? {
                     Some(len) if len > 0 => (d.decode()?),
-                    _ => Nullable::Null
+                    _ => Nullable::Null,
                 };
 
-                let maybe_hash2: Nullable<ScriptHash> =  match d.array()? {
+                let maybe_hash2: Nullable<ScriptHash> = match d.array()? {
                     Some(len) if len > 0 => (d.decode()?),
-                    _ => Nullable::Null
+                    _ => Nullable::Null,
                 };
-                  
+
                 Ok(InvalidPolicyHash(maybe_hash1, maybe_hash2))
-                
-            },
+            }
             12 => Ok(DisallowedProposalDuringBootstrap(d.decode()?)),
             13 => Ok(DisallowedVotesDuringBootstrap(d.decode()?)),
             14 => Ok(VotersDoNotExist(d.decode()?)),
@@ -341,9 +345,12 @@ impl<'b> Decode<'b, ()> for Utxo {
     }
 }
 
-impl<'b, T> Decode<'b, ()> for CustomSet258<T> where T: Decode<'b, ()> {
+impl<'b, T> Decode<'b, ()> for CustomSet258<T>
+where
+    T: Decode<'b, ()>,
+{
     fn decode(d: &mut Decoder<'b>, _ctx: &mut ()) -> Result<Self, decode::Error> {
         let tag = d.tag()?; // we are ignoring the unknown tag 258 here
-        Ok(CustomSet258 (d.decode()?))
+        Ok(CustomSet258(d.decode()?))
     }
 }

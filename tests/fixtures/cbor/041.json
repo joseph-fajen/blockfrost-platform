@@ -9,9 +9,7 @@
           "contents": {
             "contents": {
               "era": "ShelleyBasedEraConway",
-              "error": [
-                "ConwayMempoolFailure \"\\24889\""
-              ],
+              "error": ["ConwayMempoolFailure \"\\24889\""],
               "kind": "ShelleyTxValidationError"
             },
             "tag": "TxValidationErrorInCardanoMode"

@@ -9,9 +9,7 @@
           "contents": {
             "contents": {
               "era": "ShelleyBasedEraConway",
-              "error": [
-                "ConwayTxRefScriptsSizeTooBig 0 1"
-              ],
+              "error": ["ConwayTxRefScriptsSizeTooBig 0 1"],
               "kind": "ShelleyTxValidationError"
             },
             "tag": "TxValidationErrorInCardanoMode"

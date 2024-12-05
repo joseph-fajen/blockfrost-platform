@@ -187,7 +187,6 @@ mod tests {
 
     #[test]
     fn test_decoding_with_cases() {
-
         let case_files = get_file_list_from_folder();
 
         for case_file in case_files {
@@ -211,7 +210,8 @@ mod tests {
                     }
                 };
 
-                let error_response = NodeClient::_unused_i_i_i_i_i_i_i_generate_error_response(error);
+                let error_response =
+                    NodeClient::_unused_i_i_i_i_i_i_i_generate_error_response(error);
 
                 let generated_json = match serde_json::to_value(&error_response) {
                     Ok(json) => json,
@@ -220,9 +220,8 @@ mod tests {
                     }
                 };
 
-                
                 assert_eq!(
-                    &case.json, &generated_json, 
+                    &case.json, &generated_json,
                     "Failed to match JSON: \n case: {:?} \n file: {:?}\n\n",
                     &case, &case_file
                 );
