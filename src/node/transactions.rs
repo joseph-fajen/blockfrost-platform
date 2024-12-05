@@ -104,7 +104,7 @@ impl NodeClient {
 
     #[cfg(test)]
     /// Mimicks the data structure of the error response from the cardano-submit-api
-    fn _unused_i_i_i_i_i_i_i_generate_error_response(error: TxValidationError) -> TxSubmitFail {
+    pub fn _unused_i_i_i_i_i_i_i_generate_error_response(error: TxValidationError) -> TxSubmitFail {
         use crate::cbor::haskell_types::{
             TxCmdError::TxCmdTxSubmitValidationError, TxSubmitFail::TxSubmitFail,
             TxValidationErrorInCardanoMode::TxValidationErrorInCardanoMode,
