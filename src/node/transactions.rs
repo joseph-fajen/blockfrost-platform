@@ -3,7 +3,7 @@ use crate::{
     cbor::haskell_types::{TxSubmitFail, TxValidationError},
     BlockfrostError,
 };
-use pallas_codec::minicbor::{display, Decoder};
+use pallas_codec::minicbor::Decoder;
 use pallas_crypto::hash::Hasher;
 use pallas_network::{
     miniprotocols::{
@@ -118,9 +118,9 @@ impl NodeClient {
 mod tests {
     use std::{fs, io};
 
+    use pallas_codec::minicbor::display;
     use serde::Deserialize;
     use serde_json::Value;
-    use tracing_subscriber::field::display;
 
     use crate::cbor::haskell_types::{
         ApplyConwayTxPredError::*, ApplyTxError, ShelleyBasedEra::*, TxValidationError::*,
@@ -184,6 +184,7 @@ mod tests {
 
     #[test]
     fn test_decoding_with_cases() {
+
         let case_files = get_file_list_from_folder();
 
         for case_file in case_files {
@@ -216,8 +217,9 @@ mod tests {
                     }
                 };
 
+                
                 assert_eq!(
-                    &generated_json, &case.json,
+                    &case.json, &generated_json, 
                     "Failed to match JSON: \n case: {:?} \n file: {:?}\n\n",
                     &case, &case_file
                 );

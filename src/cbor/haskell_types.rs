@@ -1,19 +1,19 @@
 #![allow(dead_code)]
 
-use std::{collections::HashMap, fmt, hash::Hasher};
+use std::{collections::HashMap, fmt::{self, Formatter}, hash::Hasher};
 
-use pallas::ledger::addresses::StakeKeyHash;
+use pallas::{interop::utxorpc::spec::cardano::Script, ledger::addresses::StakeKeyHash};
 use pallas_codec::minicbor;
 use pallas_codec::minicbor::Decode;
 use pallas_codec::utils::Bytes;
 use pallas_primitives::{
-    byron::{TxIn, TxOut},
-    conway::{DatumHash, ExUnits, RewardAccount, ScriptHash, VKeyWitness, Value},
-    Coin, Epoch, StakeCredential,
+    byron::{EpochId, TxIn, TxOut}, conway::{Anchor, DatumHash, ExUnits, GovAction, GovActionId, ProposalProcedure, RewardAccount, ScriptHash, VKeyWitness, Value, Voter}, AddrKeyhash, Coin, Epoch, Nullable, StakeCredential
 };
 use serde::Serialize;
 use serde_with::SerializeDisplay;
 use std::fmt::Display;
+
+use super::haskell_display::HaskellDisplay;
 
 /// This file contains the types that are mapped from the Haskell codebase.
 /// The main reason these mappings exist is to mimick the error responses from the cardano-submit-api
@@ -121,11 +121,13 @@ pub enum ApplyConwayTxPredError {
     ConwayUtxowFailure(ConwayUtxoWPredFailure),
     ConwayCertsFailure(ConwayCertsPredFailure),
     ConwayGovFailure(ConwayGovPredFailure),
-    ConwayWdrlNotDelegatedToDRep(Vec<Bytes>),
+    ConwayWdrlNotDelegatedToDRep(Vec<KeyHash>),
     ConwayTreasuryValueMismatch(DisplayCoin, DisplayCoin),
-    ConwayTxRefScriptsSizeTooBig(u64, u64),
+    ConwayTxRefScriptsSizeTooBig(i8, i8),
     ConwayMempoolFailure(String),
 }
+
+
 
 impl fmt::Display for ApplyConwayTxPredError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -138,19 +140,32 @@ impl fmt::Display for ApplyConwayTxPredError {
             ConwayWdrlNotDelegatedToDRep(v) => write!(
                 f,
                 "ConwayWdrlNotDelegatedToDRep ({})",
-                display_bytes_vector_as_key_hash(v)
+                v.to_haskell_str()
             ),
             ConwayTreasuryValueMismatch(c1, c2) => {
                 write!(f, "ConwayTreasuryValueMismatch ({}) ({})", c1, c2)
             }
             ConwayTxRefScriptsSizeTooBig(s1, s2) => {
-                write!(f, "ConwayTxRefScriptsSizeTooBig {} {}", s1, s2)
+                
+                write!(f, "ConwayTxRefScriptsSizeTooBig {} {}", s1.to_haskell_str(), s2.to_haskell_str())
             }
-            ConwayMempoolFailure(e) => write!(
+            ConwayMempoolFailure(e) => {
+
+                let t = e.chars().map(|c| {
+                    if c.is_ascii() {
+                        c.to_string()
+                    } else {
+                        format!("\"\\{}\"", c as u32)
+                    }
+                }).collect::<String>();
+
+                write!(
                 f,
-                "ConwayMempoolFailure {:?}",
-                if e.len() > 0 { e } else { "" }
-            ),
+                "ConwayMempoolFailure {}",
+                if t.len() > 0 { t } else { "".to_string() }
+                
+            )
+        },
         }
     }
 }
@@ -159,7 +174,7 @@ impl fmt::Display for ApplyConwayTxPredError {
 #[derive(Debug, SerializeDisplay)]
 pub enum ConwayUtxoWPredFailure {
     UtxoFailure(ConwayUtxoPredFailure),
-    InvalidWitnessesUTXOW(DisplayVKeyWitness),
+    InvalidWitnessesUTXOW(VKey),
     MissingVKeyWitnessesUTXOW(DisplayVKeyWitness),
     MissingScriptWitnessesUTXOW(DisplayScriptHash),
     ScriptWitnessNotValidatingUTXOW(DisplayScriptHash),
@@ -167,15 +182,15 @@ pub enum ConwayUtxoWPredFailure {
     MissingTxMetadata(Bytes),              // auxDataHash
     ConflictingMetadataHash(Bytes, Bytes), // Mismatch auxDataHash
     InvalidMetadata(),                     // empty
-    ExtraneousScriptWitnessesUTXOW(DisplayScriptHash),
+    ExtraneousScriptWitnessesUTXOW(CustomSet258<ScriptHash>),
     MissingRedeemers(Vec<(PlutusPurpose, DisplayScriptHash)>),
     MissingRequiredDatums(Vec<DatumHash>, Vec<DatumHash>), // set of missing data hashes, set of recieved data hashes
     NotAllowedSupplementalDatums(Vec<DatumHash>, Vec<DatumHash>), // set of unallowed data hashes, set of acceptable data hashes
-    PPViewHashesDontMatch(Option<ScriptIntegrityHash>),
+    PPViewHashesDontMatch(Nullable<SafeHash>, Nullable<SafeHash>),
     UnspendableUTxONoDatumHash(Vec<SerializableTxIn>), //  Set of transaction inputs that are TwoPhase scripts, and should have a DataHash but don't
     ExtraRedeemers(Vec<PlutusPurpose>),                // List of redeemers not needed
-    MalformedScriptWitnesses(Vec<DisplayScriptHash>),
-    MalformedReferenceScripts(Vec<DisplayScriptHash>),
+    MalformedScriptWitnesses(CustomSet258<DisplayScriptHash>),
+    MalformedReferenceScripts(CustomSet258<DisplayScriptHash>),
 }
 
 impl fmt::Display for ConwayUtxoWPredFailure {
@@ -184,7 +199,7 @@ impl fmt::Display for ConwayUtxoWPredFailure {
 
         match self {
             UtxoFailure(e) => write!(f, "UtxoFailure ({})", e),
-            InvalidWitnessesUTXOW(e) => write!(f, "InvalidWitnessesUTXOW ({})", e),
+            InvalidWitnessesUTXOW(e) => write!(f, "InvalidWitnessesUTXOW [{}]", e.to_haskell_str()),
             MissingVKeyWitnessesUTXOW(e) => write!(f, "MissingVKeyWitnessesUTXOW ({})", e),
             MissingScriptWitnessesUTXOW(e) => write!(f, "MissingScriptWitnessesUTXOW ({})", e),
             ScriptWitnessNotValidatingUTXOW(e) => {
@@ -200,8 +215,8 @@ impl fmt::Display for ConwayUtxoWPredFailure {
                 write!(f, "ConflictingMetadataHash ({}, {})", e1, e2)
             }
             InvalidMetadata() => write!(f, "InvalidMetadata"),
-            ExtraneousScriptWitnessesUTXOW(e) => {
-                write!(f, "ExtraneousScriptWitnessesUTXOW ({})", e)
+            ExtraneousScriptWitnessesUTXOW(vec) => {
+                write!(f, "ExtraneousScriptWitnessesUTXOW ({})", vec.to_haskell_str())
             }
             MissingRedeemers(e) => write!(f, "MissingRedeemers ({})", display_tuple_vec(e)),
             MissingRequiredDatums(e1, e2) => write!(
@@ -216,16 +231,16 @@ impl fmt::Display for ConwayUtxoWPredFailure {
                 display_vec(e1),
                 display_vec(e2)
             ),
-            PPViewHashesDontMatch(e) => write!(f, "PPViewHashesDontMatch ({})", display_option(e)),
+            PPViewHashesDontMatch(h1, h2) => write!(f, "PPViewHashesDontMatch ({}) ({})", h1.to_haskell_str(), h2.to_haskell_str()),
             UnspendableUTxONoDatumHash(e) => {
                 write!(f, "UnspendableUTxONoDatumHash ({})", display_vec(e))
             }
             ExtraRedeemers(e) => write!(f, "ExtraRedeemers ({})", display_vec(e)),
-            MalformedScriptWitnesses(e) => {
-                write!(f, "MalformedScriptWitnesses ({})", display_vec(e))
+            MalformedScriptWitnesses(set) => {
+                write!(f, "MalformedScriptWitnesses ({})", set.to_haskell_str())
             }
-            MalformedReferenceScripts(e) => {
-                write!(f, "MalformedReferenceScripts ({})", display_vec(e))
+            MalformedReferenceScripts(set) => {
+                write!(f, "MalformedReferenceScripts ({})", set.to_haskell_str())
             }
         }
     }
@@ -246,7 +261,7 @@ pub enum ConwayUtxoPredFailure {
     OutputTooSmallUTxO(Vec<SerializableTxOut>),
     OutputBootAddrAttrsTooBig(Vec<SerializableTxOut>),
     OutputTooBigUTxO(Vec<(u64, u64, SerializableTxOut)>), //  list of supplied bad transaction output triples (actualSize,PParameterMaxValue,TxOut)
-    InsufficientCollateral(DisplayCoin, DisplayCoin), // balance computed, the required collateral for the given fee
+    InsufficientCollateral(DeltaCoin, DisplayCoin), // balance computed, the required collateral for the given fee
     ScriptsNotPaidUTxO(Utxo), // The UTxO entries which have the wrong kind of script
     ExUnitsTooBigUTxO(DisplayExUnits), // check: The values are serialised in reverse order
     CollateralContainsNonADA(DisplayValue),
@@ -328,21 +343,21 @@ impl fmt::Display for ConwayUtxoPredFailure {
 // the ones with string are not worked out
 #[derive(Debug)]
 pub enum ConwayGovPredFailure {
-    GovActionsDoNotExist(String), //  (NonEmpty (GovActionId (EraCrypto era)))
-    MalformedProposal(String),    // GovAction era
+    GovActionsDoNotExist(Vec<GovActionId>), //  (NonEmpty (GovActionId (EraCrypto era)))
+    MalformedProposal(GovAction),    // GovAction era
     ProposalProcedureNetworkIdMismatch(RewardAccountFielded, Network), // (RewardAccount (EraCrypto era)) Network
-    TreasuryWithdrawalsNetworkIdMismatch(String), // (Set.Set (RewardAccount (EraCrypto era))) Network
+    TreasuryWithdrawalsNetworkIdMismatch(CustomSet258<RewardAccount>, Network), // (Set.Set (RewardAccount (EraCrypto era))) Network
     ProposalDepositIncorrect(String),             // !(Mismatch 'RelEQ Coin)
-    DisallowedVoters(String), // !(NonEmpty (Voter (EraCrypto era), GovActionId (EraCrypto era)))
-    ConflictingCommitteeUpdate(String), // (Set.Set (Credential 'ColdCommitteeRole (EraCrypto era)))
-    ExpirationEpochTooSmall(HashMap<DisplayStakeCredential, u64>), // Probably wrong credintial type!, epochno
+    DisallowedVoters(Vec<(Voter,GovActionId)>), // !(NonEmpty (Voter (EraCrypto era), GovActionId (EraCrypto era)))
+    ConflictingCommitteeUpdate(CustomSet258<Credential>), // (Set.Set (Credential 'ColdCommitteeRole (EraCrypto era)))
+    ExpirationEpochTooSmall(HashMap<StakeCredential, EpochNo>), // Probably wrong credintial type!, epochno
     InvalidPrevGovActionId(String),                                // (ProposalProcedure era)
-    VotingOnExpiredGovAction(String), // (NonEmpty (Voter (EraCrypto era), GovActionId (EraCrypto era)))
+    VotingOnExpiredGovAction(Vec<(Voter,GovActionId)>), // (NonEmpty (Voter (EraCrypto era), GovActionId (EraCrypto era)))
     ProposalCantFollow(String),       //        (StrictMaybe (GovPurposeId 'HardForkPurpose era)) |
-    InvalidPolicyHash(String), //        (StrictMaybe (ScriptHash (EraCrypto era)))    (StrictMaybe (ScriptHash (EraCrypto era)))
-    DisallowedProposalDuringBootstrap(String), // (ProposalProcedure era)
-    DisallowedVotesDuringBootstrap(String), //        (NonEmpty (Voter (EraCrypto era), GovActionId (EraCrypto era)))
-    VotersDoNotExist(String),               // (NonEmpty (Voter (EraCrypto era)))
+    InvalidPolicyHash(Nullable<ScriptHash>, Nullable<ScriptHash>), //        (StrictMaybe (ScriptHash (EraCrypto era)))    (StrictMaybe (ScriptHash (EraCrypto era)))
+    DisallowedProposalDuringBootstrap(ProposalProcedure), // (ProposalProcedure era)
+    DisallowedVotesDuringBootstrap(Vec<(Voter,GovActionId)>), //        (NonEmpty (Voter (EraCrypto era), GovActionId (EraCrypto era)))
+    VotersDoNotExist(Vec<Voter>),               // (NonEmpty (Voter (EraCrypto era)))
     ZeroTreasuryWithdrawals(String),        // (GovAction era)
     ProposalReturnAccountDoesNotExist(String), // (RewardAccount (EraCrypto era))
     TreasuryWithdrawalReturnAccountsDoNotExist(String), //(NonEmpty (RewardAccount (EraCrypto era)))
@@ -352,31 +367,31 @@ impl fmt::Display for ConwayGovPredFailure {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use ConwayGovPredFailure::*;
         match self {
-            GovActionsDoNotExist(s) => write!(f, "GovActionsDoNotExist ({})", s),
-            MalformedProposal(s) => write!(f, "MalformedProposal ({})", s),
+            GovActionsDoNotExist(vec) => write!(f, "GovActionsDoNotExist ({})", vec.to_haskell_str()),
+            MalformedProposal(act) => write!(f, "MalformedProposal ({})", act.to_haskell_str()),
             ProposalProcedureNetworkIdMismatch(ra, n) => {
                 write!(f, "ProposalProcedureNetworkIdMismatch ({}) {}", ra, n)
             }
-            TreasuryWithdrawalsNetworkIdMismatch(s) => {
-                write!(f, "TreasuryWithdrawalsNetworkIdMismatch ({})", s)
+            TreasuryWithdrawalsNetworkIdMismatch(set, n) => {
+                write!(f, "TreasuryWithdrawalsNetworkIdMismatch ({}) {}", set.to_haskell_str(), n)
             }
             ProposalDepositIncorrect(s) => write!(f, "ProposalDepositIncorrect ({})", s),
-            DisallowedVoters(s) => write!(f, "DisallowedVoters ({})", s),
-            ConflictingCommitteeUpdate(s) => write!(f, "ConflictingCommitteeUpdate ({})", s),
+            DisallowedVoters(v) => write!(f, "DisallowedVoters ({})", v.to_haskell_str()),
+            ConflictingCommitteeUpdate(set) => write!(f, "ConflictingCommitteeUpdate ({})", set.to_haskell_str()),
             ExpirationEpochTooSmall(map) => {
-                write!(f, "ExpirationEpochTooSmall ({})", display_hashmap(map))
+                write!(f, "ExpirationEpochTooSmall ({})", map.to_haskell_str())
             }
             InvalidPrevGovActionId(s) => write!(f, "InvalidPrevGovActionId ({})", s),
-            VotingOnExpiredGovAction(s) => write!(f, "VotingOnExpiredGovAction ({})", s),
+            VotingOnExpiredGovAction(vec) => write!(f, "VotingOnExpiredGovAction ({})", vec.to_haskell_str()),
             ProposalCantFollow(s) => write!(f, "ProposalCantFollow ({})", s),
-            InvalidPolicyHash(s) => write!(f, "InvalidPolicyHash ({})", s),
+            InvalidPolicyHash(maybe1, maybe2) => write!(f, "InvalidPolicyHash {} {}", maybe1.to_haskell_str(), maybe2.to_haskell_str()),
             DisallowedProposalDuringBootstrap(s) => {
-                write!(f, "DisallowedProposalDuringBootstrap ({})", s)
+                write!(f, "DisallowedProposalDuringBootstrap ({})", s.to_haskell_str())
             }
-            DisallowedVotesDuringBootstrap(s) => {
-                write!(f, "DisallowedVotesDuringBootstrap ({})", s)
+            DisallowedVotesDuringBootstrap(v) => {
+                write!(f, "DisallowedVotesDuringBootstrap ({})", v.to_haskell_str())
             }
-            VotersDoNotExist(s) => write!(f, "VotersDoNotExist ({})", s),
+            VotersDoNotExist(s) => write!(f, "VotersDoNotExist ({})", s.to_haskell_str()),
             ZeroTreasuryWithdrawals(s) => write!(f, "ZeroTreasuryWithdrawals ({})", s),
             ProposalReturnAccountDoesNotExist(s) => {
                 write!(f, "ProposalReturnAccountDoesNotExist ({})", s)
@@ -476,6 +491,7 @@ impl fmt::Display for DisplayScriptHash {
 #[cbor(transparent)]
 pub struct DisplayVKeyWitness(#[n(0)] pub VKeyWitness);
 
+
 impl fmt::Display for DisplayVKeyWitness {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
@@ -500,6 +516,8 @@ pub enum PlutusPurpose {
     Certifying, // 2
     Rewarding,  // 3
 }
+
+
 
 impl fmt::Display for PlutusPurpose {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -531,16 +549,7 @@ impl fmt::Display for Network {
         }
     }
 }
-// https://github.com/IntersectMBO/cardano-ledger/blob/aed1dc28b98c25ea73bc692e7e6c6d3a22381ff5/eras/alonzo/impl/src/Cardano/Ledger/Alonzo/TxBody/Internal.hs#L162
-// not tested yet
-#[derive(Debug, Decode)]
-pub struct ScriptIntegrityHash(#[n(0)] ScriptHash);
 
-impl fmt::Display for ScriptIntegrityHash {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ScriptIntegrityHash({:?})", self.0)
-    }
-}
 
 // https://github.com/IntersectMBO/cardano-ledger/blob/aed1dc28b98c25ea73bc692e7e6c6d3a22381ff5/eras/allegra/impl/src/Cardano/Ledger/Allegra/Scripts.hs#L109
 #[derive(Debug, Decode, Serialize)]
@@ -604,20 +613,64 @@ pub struct EraMismatch {
 #[cbor(transparent)]
 pub struct DisplayCoin(#[n(0)] Coin);
 
-impl fmt::Display for DisplayCoin {
+#[derive(Debug, Decode)]
+#[cbor(transparent)]
+pub struct EpochNo(#[n(0)]pub u64);
+
+
+#[derive(Debug, Decode)]
+#[cbor(transparent)]
+pub struct DeltaCoin(#[n(0)] Coin);
+pub enum StrictMaybe< T: HaskellDisplay > {
+    Just(T),
+    Nothing,
+}
+
+impl From<ScriptHash> for StrictMaybe<ScriptHash> {
+    fn from(item: ScriptHash) -> Self {
+        match item.len()  {
+            0 => StrictMaybe::Nothing,
+            _ => StrictMaybe::Just(item),
+        }
+    }
+}
+impl From<&[u8]> for StrictMaybe<ScriptHash> {
+    fn from(bytes: &[u8]) -> Self {
+        match bytes.len()  {
+            0 => StrictMaybe::Nothing,
+            _ => StrictMaybe::Just(bytes.into()),
+        }
+    }
+}
+ 
+impl fmt::Display for DisplayCoin { 
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Coin {}", self.0)
     }
 }
 
-pub struct InvalidPrevGovActionId(ProposalProcedure);
-
-pub struct ProposalProcedure {
-    p_proc_deposit: DisplayCoin,
-    p_proc_reward: DisplayCoin,
+impl fmt::Display for DeltaCoin { 
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "DeltaCoin {}", self.0)
+    }
 }
 
-// RewardAccount is serialized into bytes: https://github.com/IntersectMBO/cardano-ledger/blob/33e90ea03447b44a389985ca2b158568e5f4ad65/libs/cardano-ledger-core/src/Cardano/Ledger/Address.hs#L135
+pub struct InvalidPrevGovActionId(ProposalProcedure);
+
+/*
+// https://github.com/IntersectMBO/cardano-ledger/blob/730c811b7a0ee0301d013555091e7394c77c3b19/eras/conway/impl/src/Cardano/Ledger/Conway/Governance/Procedures.hs#L476
+#[derive(Debug)]
+pub struct ProposalProcedure {
+    p_proc_deposit: DisplayCoin,
+    p_proc_return_addr: RewardAccountFielded,
+    p_proc_gov_action: GovAction,
+    pProcAnchor: Anchor
+
+}
+ */
+
+
+// RewardA+count is serialized into bytes: https://github.com/IntersectMBO/cardano-ledger/blob/33e90ea03447b44a389985ca2b158568e5f4ad65/libs/cardano-ledger-core/src/Cardano/Ledger/Address.hs#L135
 #[derive(Debug, PartialEq, Eq)]
 pub struct RewardAccountFielded {
     ra_network: Network,
@@ -680,21 +733,22 @@ impl fmt::Display for Credential {
         use Credential::*;
 
         match self {
-            ScriptHashObj(key_hash) => write!(f, "ScriptHashObj ({})", key_hash),
-            KeyHashObj(key_hash) => write!(f, "KeyHashObj ({})", key_hash),
+            ScriptHashObj(key_hash) => write!(f, "ScriptHashObj ({})", key_hash.to_haskell_str()),
+            KeyHashObj(key_hash) => write!(f, "KeyHashObj ({})", key_hash.to_haskell_str()),
         }
     }
 }
 
 #[derive(Debug, Decode, Hash, PartialEq, Eq)]
 #[cbor(transparent)]
-pub struct KeyHash(#[n(0)] Bytes);
+pub struct KeyHash(#[n(0)]pub Bytes);
 
-impl fmt::Display for KeyHash {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "KeyHash {{unKeyHash = \"{}\"}}", self.0)
-    }
-}
+#[derive(Debug, Decode, Hash, PartialEq, Eq)]
+pub struct VKey(#[n(0)]pub Bytes);
+
+#[derive(Debug, Decode, Hash, PartialEq, Eq, Clone)]
+// #[cbor(transparent)]
+pub struct SafeHash(#[n(0)]pub Bytes);
 /*
 ** cardano-submit-api types
 ** These types are used to mimick cardano-submit-api error responses.
@@ -756,6 +810,10 @@ impl fmt::Display for DisplayValue {
     }
 }
 
+// this handles the custom type with tag 258: https://github.com/input-output-hk/cbor-sets-spec/blob/master/CBOR_SETS.md
+#[derive(Debug)]
+pub struct CustomSet258<T>(pub Vec<T>);
+
 /*
 **Helper functions for Display'ing the types.
 */
@@ -816,9 +874,19 @@ fn display_bytes_as_key_hash(b: &Bytes) -> String {
 fn display_bytes_vector_as_key_hash(v: &Vec<Bytes>) -> String {
     let mut result = String::new();
     for b in v {
-        result.push_str(&format!("KeyHash {{unKeyHash = \"{}\"}} ", b));
+        result.push_str(&format!("KeyHash {{unKeyHash = \"{}\"}}", b));
+        result.push_str(" :| []");
+
     }
     result.pop();
-    result.push_str(" :| []");
     result
+}
+
+fn display_strict_maybe<T: HaskellDisplay>(maybe: &StrictMaybe<T>) -> String {
+    use StrictMaybe::*;
+                        
+    match maybe {
+        Just(t) => format!("SJust ({})", t.to_haskell_str()),
+        Nothing => "SNothing".to_string(),
+    }
 }
