@@ -33,6 +33,7 @@ services:
     restart: on-failure
     ports:
       - 3000:3000
+    profiles: [""]
     volumes:
       - node-ipc:/ipc
     entrypoint:
@@ -43,6 +44,29 @@ services:
       - $SECRET
       - --reward-address
       - $REWARD_ADDRESS
+      - --node-socket-path
+      - /ipc/node.socket
+  blockfrost-platform-solitary:
+    image: ghcr.io/blockfrost/blockfrost-platform:latest
+    build:
+      context: ./
+      target: runtime
+    develop:
+      watch:
+        - action: rebuild
+          path: .
+    init: true
+    restart: on-failure
+    ports:
+      - 3000:3000
+    volumes:
+      - node-ipc:/ipc
+    profiles: [solitary]
+    entrypoint:
+      - /app/blockfrost-platform
+      - --network
+      - $NETWORK
+      - --solitary
       - --node-socket-path
       - /ipc/node.socket
 volumes:
