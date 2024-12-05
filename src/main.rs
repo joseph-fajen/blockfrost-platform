@@ -23,6 +23,8 @@ use tracing::info;
 #[tokio::main]
 async fn main() -> Result<(), AppError> {
     let arguments = Args::parse();
+
+    arguments.init();
     let config = Config::from_args(arguments);
 
     // Setup logging

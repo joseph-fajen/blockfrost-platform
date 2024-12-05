@@ -2,6 +2,7 @@ use clap::{arg, command, Parser, ValueEnum};
 use pallas_network::miniprotocols::{MAINNET_MAGIC, PREPROD_MAGIC, PREVIEW_MAGIC};
 use std::fmt::{self, Formatter};
 use tracing::Level;
+use inquire::Confirm;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -12,14 +13,14 @@ pub struct Args {
     #[arg(long, default_value = "3000")]
     server_port: u16,
 
-    #[arg(long, required = true)]
-    network: Network,
+    #[arg(long, required_unless_present("init"))]
+    network: Option<Network>,
 
     #[arg(long, default_value = "info")]
     log_level: LogLevel,
 
-    #[arg(long, required = true)]
-    node_socket_path: String,
+    #[arg(long, required_unless_present("init"))]
+    node_socket_path: Option<String>,
 
     #[arg(long, default_value = "compact")]
     mode: Mode,
@@ -28,9 +29,12 @@ pub struct Args {
     #[arg(long)]
     solitary: bool,
 
+    #[arg(long)]
+    init: bool,
+
     #[arg(
         long,
-        required_unless_present("solitary"),
+        required_unless_present_any(&["solitary", "init"]),
         conflicts_with("solitary"),
         requires("reward_address")
     )]
@@ -38,11 +42,24 @@ pub struct Args {
 
     #[arg(
         long,
-        required_unless_present("solitary"),
+        required_unless_present_any(&["solitary", "init"]),
         conflicts_with("solitary"),
         requires("secret")
     )]
     reward_address: Option<String>,
+}
+impl Args {
+
+  pub fn init(&self) {
+    if self.init {
+      let ans = Confirm::new("Do you live in Brazil?")
+        .with_default(false)
+        .with_help_message("This data is stored for good reasons")
+        .prompt();
+
+      std::process::exit(0);
+    }
+  }
 }
 
 #[derive(Debug, Clone, ValueEnum)]
@@ -87,7 +104,8 @@ pub struct IcebreakersConfig {
 
 impl Config {
     pub fn from_args(args: Args) -> Self {
-        let network_magic = Self::get_network_magic(&args.network);
+        let network = args.network.unwrap();
+        let network_magic = Self::get_network_magic(&network);
 
         let icebreakers_config = match (args.solitary, args.reward_address, args.secret) {
             (false, Some(reward_address), Some(secret)) => Some(IcebreakersConfig {
@@ -102,11 +120,11 @@ impl Config {
             server_port: args.server_port,
             log_level: args.log_level.into(),
             network_magic,
-            node_socket_path: args.node_socket_path,
+            node_socket_path: args.node_socket_path.unwrap(),
             mode: args.mode,
             icebreakers_config,
             max_pool_connections: 10,
-            network: args.network,
+            network,
         }
     }
 
