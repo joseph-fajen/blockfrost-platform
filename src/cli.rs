@@ -6,43 +6,63 @@ use inquire::{
 };
 use pallas_network::miniprotocols::{MAINNET_MAGIC, PREPROD_MAGIC, PREVIEW_MAGIC};
 use serde::{Deserialize, Serialize};
-use std::fmt::{self, Formatter};
 use std::fs;
 use std::io::{self, Write};
+use std::{
+    fmt::{self, Formatter},
+    path::PathBuf,
+};
 use toml;
 use tracing::Level;
 
-#[derive(Parser, Debug)]
+fn default_ip() -> String {
+    "0.0.0.0".to_string()
+}
+fn default_port() -> u16 {
+    3000
+}
+
+#[derive(Parser, Debug, Serialize, Deserialize)]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
+    #[serde(default = "default_ip")]
     #[arg(long, default_value = "0.0.0.0")]
     server_address: String,
 
+    #[serde(default = "default_port")]
     #[arg(long, default_value = "3000")]
     server_port: u16,
 
-    #[arg(long, required_unless_present("init"))]
+    #[arg(long, required_unless_present_any(&["init", "config"]))]
     network: Option<Network>,
 
+    #[serde(default = "LogLevel::default_log_level")]
     #[arg(long, default_value = "info")]
     log_level: LogLevel,
 
-    #[arg(long, required_unless_present("init"))]
+    #[arg(long, required_unless_present_any(&["init", "config"]))]
     node_socket_path: Option<String>,
 
+    #[serde(default = "Mode::default_mode")]
     #[arg(long, default_value = "compact")]
     mode: Mode,
 
     /// Whether to run in solitary mode, without registering with the Icebreakers API
+    #[serde(default)]
     #[arg(long)]
     solitary: bool,
 
+    #[serde(skip)]
     #[arg(long)]
     init: bool,
 
+    #[serde(skip)]
+    #[arg(long)]
+    config: Option<PathBuf>,
+
     #[arg(
         long,
-        required_unless_present_any(&["solitary", "init"]),
+        required_unless_present_any(&["solitary", "init", "config"]),
         conflicts_with("solitary"),
         requires("reward_address")
     )]
@@ -50,44 +70,59 @@ pub struct Args {
 
     #[arg(
         long,
-        required_unless_present_any(&["solitary", "init"]),
+        required_unless_present_any(&["solitary", "init", "config"]),
         conflicts_with("solitary"),
         requires("secret")
     )]
     reward_address: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct AppConfig {
-    server_address: String,
-    server_port: u16,
-    network: Network,
-    log_level: LogLevel,
-    node_socket_path: String,
-    mode: Mode,
-    secret: Option<String>,
-    reward_address: Option<String>,
-}
-
-impl AppConfig {
-    pub fn from_file(file_path: &str) -> Result<Self, Box<dyn std::error::Error>>
-    where
-        Self: serde::de::DeserializeOwned,
-    {
+impl Args {
+    pub fn from_file(file_path: PathBuf) -> Result<Self> {
         let contents = fs::read_to_string(file_path)?;
         let config = toml::from_str(&contents)?;
         Ok(config)
     }
 
-    pub fn to_file(&self, file_path: &str) -> Result<()>
-    where
-        Self: serde::Serialize,
-    {
+    pub fn to_file(&self, file_path: &str) -> Result<()> {
         let toml_string =
             toml::to_string(self).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
         let mut file = fs::File::create(file_path)?;
         file.write_all(toml_string.as_bytes())?;
         Ok(())
+    }
+
+    fn get_network_magic(network: &Network) -> u64 {
+        match network {
+            Network::Mainnet => MAINNET_MAGIC,
+            Network::Preprod => PREPROD_MAGIC,
+            Network::Preview => PREVIEW_MAGIC,
+        }
+    }
+
+    pub fn to_config(&self) -> Config {
+        let network = self.network.clone();
+        let network_magic = Self::get_network_magic(&network.clone().unwrap());
+
+        let icebreakers_config = match (&self.reward_address, &self.secret) {
+            (Some(reward_address), Some(secret)) => Some(IcebreakersConfig {
+                reward_address: reward_address.clone(),
+                secret: secret.clone(),
+            }),
+            _ => None,
+        };
+
+        Config {
+            server_address: self.server_address.clone(),
+            server_port: self.server_port,
+            log_level: self.log_level.clone().into(),
+            network_magic,
+            node_socket_path: self.node_socket_path.clone().unwrap(),
+            mode: self.mode.clone(),
+            icebreakers_config,
+            max_pool_connections: 10,
+            network: network.unwrap(),
+        }
     }
 }
 
@@ -96,6 +131,12 @@ pub enum Mode {
     Compact,
     Light,
     Full,
+}
+
+impl Mode {
+    pub fn default_mode() -> Mode {
+        Mode::Compact
+    }
 }
 
 #[derive(Debug, Clone, ValueEnum, Serialize, Deserialize)]
@@ -112,6 +153,12 @@ pub enum LogLevel {
     Warn,
     Error,
     Trace,
+}
+
+impl LogLevel {
+    pub fn default_log_level() -> LogLevel {
+        LogLevel::Info
+    }
 }
 
 pub struct Config {
@@ -144,32 +191,33 @@ fn enum_prompt<T: std::fmt::Debug>(message: &str, enum_values: &[T]) -> Result<S
 }
 
 impl Config {
+    pub fn init2(args: Args) -> Result<Self> {
+        if args.init {
+            Self::generate_config()?;
+        }
+
+        let app_config = match args.config {
+            Some(config_path) => Args::from_file(config_path)?,
+            None => args,
+        };
+
+        Ok(app_config.to_config())
+    }
     pub fn init(args: Args) -> Result<Self> {
         if args.init {
             Self::generate_config()?;
         }
-        let network = args.network.unwrap();
-        let network_magic = Self::get_network_magic(&network);
 
-        let icebreakers_config = match (args.solitary, args.reward_address, args.secret) {
-            (false, Some(reward_address), Some(secret)) => Some(IcebreakersConfig {
-                reward_address,
-                secret,
-            }),
-            _ => None,
+        let config_path = match args.config {
+            Some(ref path) if !path.exists() => {
+                println!("Config file does not exist");
+                std::process::exit(1);
+            }
+            Some(path) => Args::from_file(path)?,
+            None => args,
         };
 
-        Ok(Config {
-            server_address: args.server_address,
-            server_port: args.server_port,
-            log_level: args.log_level.into(),
-            network_magic,
-            node_socket_path: args.node_socket_path.unwrap(),
-            mode: args.mode,
-            icebreakers_config,
-            max_pool_connections: 10,
-            network,
-        })
+        Ok(config_path.to_config())
     }
 
     fn generate_config() -> Result<()> {
@@ -228,13 +276,17 @@ impl Config {
             })
             .prompt()?;
 
-        let mut app_config = AppConfig {
-            network,
+        let mut app_config = Args {
+            init: false,
+            config: None,
+
+            solitary: is_solitary,
+            network: Some(network),
             mode,
             log_level,
             server_address,
             server_port,
-            node_socket_path,
+            node_socket_path: Some(node_socket_path),
             reward_address: None,
             secret: None,
         };
@@ -272,14 +324,6 @@ impl Config {
         println!("Config has been written to {:?}", file_path);
 
         std::process::exit(0);
-    }
-
-    fn get_network_magic(network: &Network) -> u64 {
-        match network {
-            Network::Mainnet => MAINNET_MAGIC,
-            Network::Preprod => PREPROD_MAGIC,
-            Network::Preview => PREVIEW_MAGIC,
-        }
     }
 }
 
