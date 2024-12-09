@@ -4,6 +4,7 @@ use inquire::{
     validator::{ErrorMessage, Validation},
     Confirm, Select, Text,
 };
+use merge_struct::merge;
 use pallas_network::miniprotocols::{MAINNET_MAGIC, PREPROD_MAGIC, PREVIEW_MAGIC};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -53,7 +54,7 @@ pub struct Args {
     solitary: bool,
 
     #[serde(skip)]
-    #[arg(long)]
+    #[arg(long, conflicts_with_all(&["server_address", "server_port", "network", "log_level", "node_socket_path", "mode", "solitary", "secret", "reward_address", "config"]))]
     init: bool,
 
     #[serde(skip)]
@@ -78,10 +79,10 @@ pub struct Args {
 }
 
 impl Args {
-    pub fn from_file(file_path: PathBuf) -> Result<Self> {
-        let contents = fs::read_to_string(file_path)?;
-        let config = toml::from_str(&contents)?;
-        Ok(config)
+    pub fn from_file(&self) -> Result<Self> {
+        let contents = fs::read_to_string(self.config.clone().unwrap())?;
+        let from_file: Args = toml::from_str(&contents)?;
+        Ok(merge(&from_file, self)?)
     }
 
     pub fn to_file(&self, file_path: &str) -> Result<()> {
@@ -104,8 +105,8 @@ impl Args {
         let network = self.network.clone();
         let network_magic = Self::get_network_magic(&network.clone().unwrap());
 
-        let icebreakers_config = match (&self.reward_address, &self.secret) {
-            (Some(reward_address), Some(secret)) => Some(IcebreakersConfig {
+        let icebreakers_config = match (&self.solitary, &self.reward_address, &self.secret) {
+            (true, Some(reward_address), Some(secret)) => Some(IcebreakersConfig {
                 reward_address: reward_address.clone(),
                 secret: secret.clone(),
             }),
@@ -191,18 +192,6 @@ fn enum_prompt<T: std::fmt::Debug>(message: &str, enum_values: &[T]) -> Result<S
 }
 
 impl Config {
-    pub fn init2(args: Args) -> Result<Self> {
-        if args.init {
-            Self::generate_config()?;
-        }
-
-        let app_config = match args.config {
-            Some(config_path) => Args::from_file(config_path)?,
-            None => args,
-        };
-
-        Ok(app_config.to_config())
-    }
     pub fn init(args: Args) -> Result<Self> {
         if args.init {
             Self::generate_config()?;
@@ -213,7 +202,7 @@ impl Config {
                 println!("Config file does not exist");
                 std::process::exit(1);
             }
-            Some(path) => Args::from_file(path)?,
+            Some(_) => args.from_file()?,
             None => args,
         };
 
@@ -279,7 +268,6 @@ impl Config {
         let mut app_config = Args {
             init: false,
             config: None,
-
             solitary: is_solitary,
             network: Some(network),
             mode,
