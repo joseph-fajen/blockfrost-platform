@@ -1,8 +1,12 @@
+use anyhow::{anyhow, Result};
 use clap::{arg, command, Parser, ValueEnum};
+use inquire::{
+    validator::{ErrorMessage, Validation},
+    Confirm, Select, Text,
+};
 use pallas_network::miniprotocols::{MAINNET_MAGIC, PREPROD_MAGIC, PREVIEW_MAGIC};
 use std::fmt::{self, Formatter};
 use tracing::Level;
-use inquire::Confirm;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -48,18 +52,17 @@ pub struct Args {
     )]
     reward_address: Option<String>,
 }
-impl Args {
 
-  pub fn init(&self) {
-    if self.init {
-      let ans = Confirm::new("Do you live in Brazil?")
-        .with_default(false)
-        .with_help_message("This data is stored for good reasons")
-        .prompt();
-
-      std::process::exit(0);
-    }
-  }
+fn enum_prompt<T: std::fmt::Debug>(message: &str, enum_values: &[T]) -> Result<String> {
+    Select::new(
+        message,
+        enum_values
+            .iter()
+            .map(|it| format!("{:?}", it))
+            .collect::<Vec<_>>(),
+    )
+    .prompt()
+    .map_err(|e| anyhow!(e))
 }
 
 #[derive(Debug, Clone, ValueEnum)]
@@ -103,7 +106,10 @@ pub struct IcebreakersConfig {
 }
 
 impl Config {
-    pub fn from_args(args: Args) -> Self {
+    pub fn init(args: Args) -> Self {
+        if args.init {
+            Self::generate_config();
+        }
         let network = args.network.unwrap();
         let network_magic = Self::get_network_magic(&network);
 
@@ -126,6 +132,61 @@ impl Config {
             max_pool_connections: 10,
             network,
         }
+    }
+
+    fn generate_config() {
+        let is_solitary = Confirm::new("Run in solitary mode?")
+            .with_default(false)
+            .with_help_message("Should be run without icebreakers API?")
+            .prompt();
+
+        let network: Result<Network> = enum_prompt(
+            "Which network are you connecting to?",
+            Network::value_variants(),
+        )
+        .and_then(|it| Network::from_str(it.as_str(), true).map_err(|e| anyhow!(e)));
+
+        let mode: Result<Mode> = enum_prompt("Mode?", Mode::value_variants())
+            .and_then(|it| Mode::from_str(it.as_str(), true).map_err(|e| anyhow!(e)));
+
+        let log_level: Result<LogLevel> =
+            enum_prompt("What should be the log level?", LogLevel::value_variants())
+                .and_then(|it| LogLevel::from_str(it.as_str(), true).map_err(|e| anyhow!(e)));
+
+        let ip_address = Text::new("Enter the server IP address:")
+            .with_default("0.0.0.0")
+            .with_validator(|input: &str| {
+                input
+                    .parse::<std::net::IpAddr>()
+                    .map(|_| Validation::Valid)
+                    .or_else(|_| {
+                        Ok(Validation::Invalid(ErrorMessage::Custom(
+                            "Invalid IP address".into(),
+                        )))
+                    })
+            })
+            .prompt();
+
+        let port = Text::new("Enter the port number:")
+            .with_default("3000")
+            .with_validator(|input: &str| match input.parse::<u16>() {
+                Ok(port) if port >= 1 => Ok(Validation::Valid),
+                _ => Ok(Validation::Invalid(ErrorMessage::Custom(
+                    "Invalid port number. It must be between 1 and 65535".into(),
+                ))),
+            })
+            .prompt()
+            .map_err(|e| anyhow!(e))
+            .and_then(|it| it.parse::<u16>().map_err(|e| anyhow!(e)));
+
+        dbg!(is_solitary);
+        dbg!(network);
+        dbg!(mode);
+        dbg!(log_level);
+        dbg!(ip_address);
+        dbg!(port);
+
+        std::process::exit(0);
     }
 
     fn get_network_magic(network: &Network) -> u64 {

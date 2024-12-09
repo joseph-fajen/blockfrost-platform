@@ -24,8 +24,7 @@ use tracing::info;
 async fn main() -> Result<(), AppError> {
     let arguments = Args::parse();
 
-    arguments.init();
-    let config = Config::from_args(arguments);
+    let config = Config::init(arguments);
 
     // Setup logging
     setup_tracing(&config);
