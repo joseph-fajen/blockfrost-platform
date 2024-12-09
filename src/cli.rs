@@ -179,12 +179,38 @@ impl Config {
             .map_err(|e| anyhow!(e))
             .and_then(|it| it.parse::<u16>().map_err(|e| anyhow!(e)));
 
+        let reward_address = Text::new("Enter the reward address:")
+            .with_validator(|input: &str| {
+                if input.is_empty() {
+                    Ok(Validation::Invalid(ErrorMessage::Custom(
+                        "Invalid reward address.".into(),
+                    )))
+                } else {
+                    Ok(Validation::Valid)
+                }
+            })
+            .prompt();
+
+        let secret = Text::new("Enter the icebreakers secret:")
+            .with_validator(|input: &str| {
+                if input.is_empty() {
+                    Ok(Validation::Invalid(ErrorMessage::Custom(
+                        "Invalid reward address.".into(),
+                    )))
+                } else {
+                    Ok(Validation::Valid)
+                }
+            })
+            .prompt();
+
         dbg!(is_solitary);
         dbg!(network);
         dbg!(mode);
         dbg!(log_level);
         dbg!(ip_address);
         dbg!(port);
+        dbg!(reward_address);
+        dbg!(secret);
 
         std::process::exit(0);
     }
