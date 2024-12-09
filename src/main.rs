@@ -1,3 +1,4 @@
+use anyhow::Result;
 use axum::{
     extract::Request,
     middleware::from_fn,
@@ -21,10 +22,10 @@ use tower_http::normalize_path::NormalizePathLayer;
 use tracing::info;
 
 #[tokio::main]
-async fn main() -> Result<(), AppError> {
+async fn main() -> Result<()> {
     let arguments = Args::parse();
 
-    let config = Config::init(arguments);
+    let config = Config::init(arguments)?;
 
     // Setup logging
     setup_tracing(&config);

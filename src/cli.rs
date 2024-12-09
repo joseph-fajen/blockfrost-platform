@@ -5,7 +5,11 @@ use inquire::{
     Confirm, Select, Text,
 };
 use pallas_network::miniprotocols::{MAINNET_MAGIC, PREPROD_MAGIC, PREVIEW_MAGIC};
+use serde::{Deserialize, Serialize};
 use std::fmt::{self, Formatter};
+use std::fs;
+use std::io::{self, Write};
+use toml;
 use tracing::Level;
 
 #[derive(Parser, Debug)]
@@ -53,33 +57,55 @@ pub struct Args {
     reward_address: Option<String>,
 }
 
-fn enum_prompt<T: std::fmt::Debug>(message: &str, enum_values: &[T]) -> Result<String> {
-    Select::new(
-        message,
-        enum_values
-            .iter()
-            .map(|it| format!("{:?}", it))
-            .collect::<Vec<_>>(),
-    )
-    .prompt()
-    .map_err(|e| anyhow!(e))
+#[derive(Debug, Serialize, Deserialize)]
+struct AppConfig {
+    server_address: String,
+    server_port: u16,
+    network: Network,
+    log_level: LogLevel,
+    node_socket_path: String,
+    mode: Mode,
+    secret: Option<String>,
+    reward_address: Option<String>,
 }
 
-#[derive(Debug, Clone, ValueEnum)]
+impl AppConfig {
+    pub fn from_file(file_path: &str) -> Result<Self, Box<dyn std::error::Error>>
+    where
+        Self: serde::de::DeserializeOwned,
+    {
+        let contents = fs::read_to_string(file_path)?;
+        let config = toml::from_str(&contents)?;
+        Ok(config)
+    }
+
+    pub fn to_file(&self, file_path: &str) -> Result<()>
+    where
+        Self: serde::Serialize,
+    {
+        let toml_string =
+            toml::to_string(self).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let mut file = fs::File::create(file_path)?;
+        file.write_all(toml_string.as_bytes())?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, ValueEnum, Serialize, Deserialize)]
 pub enum Mode {
     Compact,
     Light,
     Full,
 }
 
-#[derive(Debug, Clone, ValueEnum)]
+#[derive(Debug, Clone, ValueEnum, Serialize, Deserialize)]
 pub enum Network {
     Mainnet,
     Preprod,
     Preview,
 }
 
-#[derive(Debug, Clone, ValueEnum)]
+#[derive(Debug, Clone, ValueEnum, Serialize, Deserialize)]
 pub enum LogLevel {
     Debug,
     Info,
@@ -105,10 +131,22 @@ pub struct IcebreakersConfig {
     pub secret: String,
 }
 
+fn enum_prompt<T: std::fmt::Debug>(message: &str, enum_values: &[T]) -> Result<String> {
+    Select::new(
+        message,
+        enum_values
+            .iter()
+            .map(|it| format!("{:?}", it))
+            .collect::<Vec<_>>(),
+    )
+    .prompt()
+    .map_err(|e| anyhow!(e))
+}
+
 impl Config {
-    pub fn init(args: Args) -> Self {
+    pub fn init(args: Args) -> Result<Self> {
         if args.init {
-            Self::generate_config();
+            Self::generate_config()?;
         }
         let network = args.network.unwrap();
         let network_magic = Self::get_network_magic(&network);
@@ -121,7 +159,7 @@ impl Config {
             _ => None,
         };
 
-        Config {
+        Ok(Config {
             server_address: args.server_address,
             server_port: args.server_port,
             log_level: args.log_level.into(),
@@ -131,29 +169,28 @@ impl Config {
             icebreakers_config,
             max_pool_connections: 10,
             network,
-        }
+        })
     }
 
-    fn generate_config() {
+    fn generate_config() -> Result<()> {
         let is_solitary = Confirm::new("Run in solitary mode?")
             .with_default(false)
             .with_help_message("Should be run without icebreakers API?")
-            .prompt();
+            .prompt()?;
 
-        let network: Result<Network> = enum_prompt(
+        let network = enum_prompt(
             "Which network are you connecting to?",
             Network::value_variants(),
         )
-        .and_then(|it| Network::from_str(it.as_str(), true).map_err(|e| anyhow!(e)));
+        .and_then(|it| Network::from_str(it.as_str(), true).map_err(|e| anyhow!(e)))?;
 
-        let mode: Result<Mode> = enum_prompt("Mode?", Mode::value_variants())
-            .and_then(|it| Mode::from_str(it.as_str(), true).map_err(|e| anyhow!(e)));
+        let mode = enum_prompt("Mode?", Mode::value_variants())
+            .and_then(|it| Mode::from_str(it.as_str(), true).map_err(|e| anyhow!(e)))?;
 
-        let log_level: Result<LogLevel> =
-            enum_prompt("What should be the log level?", LogLevel::value_variants())
-                .and_then(|it| LogLevel::from_str(it.as_str(), true).map_err(|e| anyhow!(e)));
+        let log_level = enum_prompt("What should be the log level?", LogLevel::value_variants())
+            .and_then(|it| LogLevel::from_str(it.as_str(), true).map_err(|e| anyhow!(e)))?;
 
-        let ip_address = Text::new("Enter the server IP address:")
+        let server_address = Text::new("Enter the server IP address:")
             .with_default("0.0.0.0")
             .with_validator(|input: &str| {
                 input
@@ -165,9 +202,9 @@ impl Config {
                         )))
                     })
             })
-            .prompt();
+            .prompt()?;
 
-        let port = Text::new("Enter the port number:")
+        let server_port = Text::new("Enter the port number:")
             .with_default("3000")
             .with_validator(|input: &str| match input.parse::<u16>() {
                 Ok(port) if port >= 1 => Ok(Validation::Valid),
@@ -177,40 +214,62 @@ impl Config {
             })
             .prompt()
             .map_err(|e| anyhow!(e))
-            .and_then(|it| it.parse::<u16>().map_err(|e| anyhow!(e)));
+            .and_then(|it| it.parse::<u16>().map_err(|e| anyhow!(e)))?;
 
-        let reward_address = Text::new("Enter the reward address:")
+        let node_socket_path = Text::new("Enter patht to Cardano node socket:")
             .with_validator(|input: &str| {
                 if input.is_empty() {
                     Ok(Validation::Invalid(ErrorMessage::Custom(
-                        "Invalid reward address.".into(),
+                        "Invalid path.".into(),
                     )))
                 } else {
                     Ok(Validation::Valid)
                 }
             })
-            .prompt();
+            .prompt()?;
 
-        let secret = Text::new("Enter the icebreakers secret:")
-            .with_validator(|input: &str| {
-                if input.is_empty() {
-                    Ok(Validation::Invalid(ErrorMessage::Custom(
-                        "Invalid reward address.".into(),
-                    )))
-                } else {
-                    Ok(Validation::Valid)
-                }
-            })
-            .prompt();
+        let mut app_config = AppConfig {
+            network,
+            mode,
+            log_level,
+            server_address,
+            server_port,
+            node_socket_path,
+            reward_address: None,
+            secret: None,
+        };
 
-        dbg!(is_solitary);
-        dbg!(network);
-        dbg!(mode);
-        dbg!(log_level);
-        dbg!(ip_address);
-        dbg!(port);
-        dbg!(reward_address);
-        dbg!(secret);
+        if !is_solitary {
+            let reward_address = Text::new("Enter the reward address:")
+                .with_validator(|input: &str| {
+                    if input.is_empty() {
+                        Ok(Validation::Invalid(ErrorMessage::Custom(
+                            "Invalid reward address.".into(),
+                        )))
+                    } else {
+                        Ok(Validation::Valid)
+                    }
+                })
+                .prompt()?;
+
+            let secret = Text::new("Enter the icebreakers secret:")
+                .with_validator(|input: &str| {
+                    if input.is_empty() {
+                        Ok(Validation::Invalid(ErrorMessage::Custom(
+                            "Invalid reward address.".into(),
+                        )))
+                    } else {
+                        Ok(Validation::Valid)
+                    }
+                })
+                .prompt()?;
+            app_config.reward_address = Some(reward_address);
+            app_config.secret = Some(secret);
+        }
+
+        let file_path = std::env::current_dir().unwrap().join("blockfrost.toml");
+        app_config.to_file(file_path.to_str().unwrap())?;
+        println!("Config has been written to {:?}", file_path);
 
         std::process::exit(0);
     }
