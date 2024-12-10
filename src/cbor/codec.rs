@@ -6,10 +6,9 @@ use crate::cbor::haskell_types::{
     PlutusPurpose, ShelleyBasedEra, StrictMaybe, TxValidationError, Utxo,
 };
 
-use super::haskell_types::{
-    ConwayCertPredFailure, ConwayCertsPredFailure, ConwayGovCertPredFailure, ConwayGovPredFailure,
-    Credential, CustomSet258, Network, RewardAccountFielded,
-};
+use super::{haskell_display::HaskellDisplay, haskell_types::{
+    ConwayCertPredFailure, ConwayCertsPredFailure, ConwayDelegPredFailure, ConwayGovCertPredFailure, ConwayGovPredFailure, Credential, CustomSet258, Network, RewardAccountFielded
+}};
 
 impl<'b> Decode<'b, ()> for TxValidationError {
     fn decode(d: &mut Decoder<'b>, _ctx: &mut ()) -> Result<Self, decode::Error> {
@@ -171,29 +170,7 @@ impl<'b> Decode<'b, ()> for ConwayGovPredFailure {
             9 => Ok(VotingOnExpiredGovAction(d.decode()?)),
 
             10 => Ok(ProposalCantFollow(d.decode()?)),
-            11 => {
-                // let a = d.probe();
-
-                /* let arr = d.array().unwrap().unwrap_or(0);
-                let b1 = d.bytes()?;
-                d.array()?;
-                let b2 = d.bytes()?;
-                 */
-
-                use StrictMaybe::*;
-
-                let maybe_hash1: Nullable<ScriptHash> = match d.array()? {
-                    Some(len) if len > 0 => (d.decode()?),
-                    _ => Nullable::Null,
-                };
-
-                let maybe_hash2: Nullable<ScriptHash> = match d.array()? {
-                    Some(len) if len > 0 => (d.decode()?),
-                    _ => Nullable::Null,
-                };
-
-                Ok(InvalidPolicyHash(maybe_hash1, maybe_hash2))
-            }
+            11 =>  Ok(InvalidPolicyHash(d.decode()?, d.decode()?)),
             12 => Ok(DisallowedProposalDuringBootstrap(d.decode()?)),
             13 => Ok(DisallowedVotesDuringBootstrap(d.decode()?)),
             14 => Ok(VotersDoNotExist(d.decode()?)),
@@ -268,6 +245,48 @@ impl<'b> Decode<'b, ()> for ConwayGovCertPredFailure {
     }
 }
 
+impl<'b> Decode<'b, ()> for ConwayDelegPredFailure {
+    fn decode(d: &mut Decoder<'b>, _ctx: &mut ()) -> Result<Self, decode::Error> {
+        d.array()?;
+        let error = d.u16()?;
+
+        use ConwayDelegPredFailure::*;
+
+        match error {
+            1 => Ok(IncorrectDepositDELEG(d.decode()?)),
+            2 => Ok(StakeKeyRegisteredDELEG(d.decode()?)),
+            3 => Ok(StakeKeyNotRegisteredDELEG(d.decode()?)),
+            4 => Ok(StakeKeyHasNonZeroRewardAccountBalanceDELEG(d.decode()?)),
+            5 => Ok(DelegateeDRepNotRegisteredDELEG(d.decode()?)),
+            6 => Ok(DelegateeStakePoolNotRegisteredDELEG(d.decode()?)),
+            _ => Err(decode::Error::message(format!(
+                "unknown error code while decoding ConwayDelegPredFailure: {}",
+                error
+            ))),
+        }
+    }
+}
+
+impl<'b, T> Decode<'b, ()> for StrictMaybe<T>
+where
+    T: Decode<'b, ()> + HaskellDisplay,
+{
+    fn decode(d: &mut Decoder<'b>, _ctx: &mut ()) -> Result<Self, decode::Error> {
+        
+        let pos = d.position();
+
+        let arr = d.array()?;
+
+        match arr {
+            Some(len) if len > 0 => 
+            {
+                d.set_position(pos);
+                Ok(StrictMaybe::Just(d.decode()?))
+            },
+            _ => Ok(StrictMaybe::Nothing),
+        }
+    }
+}
 impl<'b> Decode<'b, ()> for Credential {
     fn decode(d: &mut Decoder<'b>, _ctx: &mut ()) -> Result<Self, decode::Error> {
         d.array()?;
@@ -318,16 +337,18 @@ impl<'b> Decode<'b, ()> for ShelleyBasedEra {
 // not tested yet
 impl<'b> Decode<'b, ()> for PlutusPurpose {
     fn decode(d: &mut Decoder<'b>, _ctx: &mut ()) -> Result<Self, decode::Error> {
-        // d.array()?;
+        d.array()?;
         let purpose = d.u16()?;
 
         use PlutusPurpose::*;
 
         match purpose {
-            0 => Ok(Spending),
-            1 => Ok(Minting),
-            2 => Ok(Certifying),
-            3 => Ok(Rewarding),
+            0 => Ok(Spending(d.decode()?)),
+            1 => Ok(Minting(d.decode()?)),
+            2 => Ok(Certifying(d.decode()?)),
+            3 => Ok(Rewarding(d.decode()?)),
+            4 => Ok(Voting(d.decode()?)),
+            5 => Ok(Proposing(d.decode()?)),
             _ => Err(decode::Error::message(format!(
                 "unknown purpose while decoding PlutusPurpose: {}",
                 purpose

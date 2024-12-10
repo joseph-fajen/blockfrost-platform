@@ -1,18 +1,73 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::{self, format}};
 
+use chrono::format;
 use pallas_crypto::key;
 use pallas_primitives::{
-    conway::{Anchor, Constitution, GovAction, GovActionId, ProposalProcedure, Voter},
-    AddrKeyhash, Coin, Hash, Nullable, ProtocolVersion, RewardAccount, ScriptHash, StakeCredential,
+    conway::{Anchor, Constitution, GovAction, GovActionId, ProposalProcedure, VKeyWitness, Voter}, AddrKeyhash, Coin, DatumHash, Hash, Nullable, ProtocolVersion, RewardAccount, ScriptHash, StakeCredential
 };
 
 use super::haskell_types::{
-    Credential, CustomSet258, DisplayScriptHash, EpochNo, KeyHash, RewardAccountFielded, SafeHash,
-    StrictMaybe, VKey,
+    Array, AsIx, ConwayCertPredFailure, ConwayDelegPredFailure, ConwayGovCertPredFailure, Credential, CustomSet258, DisplayScriptHash, EpochNo, KeyHash, PlutusPurpose, RewardAccountFielded, SafeHash, StrictMaybe, VKey
 };
 
+
+impl fmt::Display for ConwayGovCertPredFailure {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use ConwayGovCertPredFailure::*;
+
+        match self {
+            ConwayDRepAlreadyRegistered(cred) => {
+                write!(f, "ConwayDRepAlreadyRegistered ({})", cred)
+            }
+            ConwayDRepNotRegistered(cred) => write!(f, "ConwayDRepNotRegistered ({})", cred),
+            ConwayDRepIncorrectDeposit(expected, actual) => {
+                write!(f, "ConwayDRepIncorrectDeposit ({}, {})", expected, actual)
+            }
+            ConwayCommitteeHasPreviouslyResigned(cred) => {
+                write!(f, "ConwayCommitteeHasPreviouslyResigned ({})", cred)
+            }
+            ConwayDRepIncorrectRefund(expected, actual) => {
+                write!(f, "ConwayDRepIncorrectRefund ({}, {})", expected, actual)
+            }
+            ConwayCommitteeIsUnknown(cred) => write!(f, "ConwayCommitteeIsUnknown ({})", cred),
+        }
+    }
+}
+
+
+impl fmt::Display for ConwayCertPredFailure {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use ConwayCertPredFailure::*;
+
+        match self {
+            DelegFailure(e) => write!(f, "DelegFailure ({})", e.to_haskell_str()),
+            PoolFailure(e) => write!(f, "PoolFailure  ({})", e),
+            GovCertFailure(e) => write!(f, "GovCertFailure ({})", e),
+        }
+    }
+}
 pub trait HaskellDisplay {
     fn to_haskell_str(&self) -> String;
+}
+
+pub trait HaskellDisplayParentesis {
+    fn to_haskell_str_p(&self) -> String;
+}
+
+impl HaskellDisplay for ConwayDelegPredFailure {
+    fn to_haskell_str(&self) -> String {
+        use ConwayDelegPredFailure::*;
+
+        match self {
+            IncorrectDepositDELEG(coin)  => format!("IncorrectDepositDELEG {}", coin.to_haskell_str()),
+            StakeKeyRegisteredDELEG(String) => "DelegFailure".to_string(),
+            StakeKeyNotRegisteredDELEG(String)  => "DelegFailure".to_string(),
+               StakeKeyHasNonZeroRewardAccountBalanceDELEG(String)  => "DelegFailure".to_string(),
+              DelegateeDRepNotRegisteredDELEG(cred) => format!("DelegateeDRepNotRegisteredDELEG ({})", cred.to_haskell_str()),
+               DelegateeStakePoolNotRegisteredDELEG (String)  => "DelegFailure".to_string(),
+        
+        }
+    }
 }
 
 impl HaskellDisplay for Coin {
@@ -34,6 +89,8 @@ impl HaskellDisplay for KeyHash {
         format!("KeyHash {{unKeyHash = \"{}\"}}", self.0)
     }
 }
+
+
 
 impl HaskellDisplay for SafeHash {
     fn to_haskell_str(&self) -> String {
@@ -62,6 +119,19 @@ where
         }
     }
 }
+
+impl<'b, T> HaskellDisplay for Option<T>
+where
+    T: HaskellDisplay ,
+{
+    fn to_haskell_str(&self) -> String {
+        match self {
+            Option::Some(v) => format!("SJust ({})", v.to_haskell_str()),
+            _ => "SNothing".to_string(),
+        }
+    }
+}
+
 fn display_nullable<T>(x: &Nullable<T>) -> String
 where
     T: HaskellDisplay + std::clone::Clone,
@@ -170,13 +240,12 @@ where
     V: HaskellDisplay,
 {
     fn to_haskell_str(&self) -> String {
-        let mut result = "fromList [".to_string();
+        let mut result = String::new();
         for (k, v) in self.iter() {
             result.push_str(&format!("({},{}),", k.to_haskell_str(), v.to_haskell_str()));
         }
-        result.truncate(result.len() - 1);
-        result.push_str("]");
-        result
+        
+        format!("fromList [{}]", result)
     }
 }
 
@@ -226,8 +295,8 @@ impl HaskellDisplay for Credential {
         use Credential::*;
 
         match self {
-            ScriptHashObj(key_hash) => format!("ScriptHashObj ({})", key_hash.to_haskell_str()),
-            KeyHashObj(key_hash) => format!("KeyHashObj ({})", key_hash.to_haskell_str()),
+            ScriptHashObj(key_hash) => key_hash.as_script_hash_obj(),
+            KeyHashObj(key_hash) => key_hash.as_key_hash_obj(),
         }
     }
 }
@@ -408,15 +477,92 @@ impl AsProtocolVersion for ProtocolVersion {
 
 impl<T: HaskellDisplay> AsFromList for Vec<T> {
     fn as_from_list(&self) -> String {
-        let mut result = "fromList [".to_string();
+        let mut result =String::new();
+
         for item in self.iter() {
             result.push_str(&format!("{},", item.to_haskell_str()));
         }
-        result.truncate(result.len() - 1);
-        result.push_str("]");
-        result
+        
+        if(result.len() > 0) {result.truncate(result.len() - 1);}
+        
+        format!("fromList [{}]", result)
     }
 }
+
+impl HaskellDisplay for AsIx {
+    fn to_haskell_str(&self) -> String {
+        format!("AsIx {{unAsIx = {}}}", self.0)
+    }
+}
+
+impl HaskellDisplay for PlutusPurpose {
+    fn to_haskell_str(&self) -> String {
+        use PlutusPurpose::*;
+
+        match self {
+            Minting(policy_id) => format!("ConwayMinting ({})", policy_id.to_haskell_str()),
+            Spending(txin) => format!("ConwaySpending ({})", txin.to_haskell_str()),
+            Rewarding(reward_account) => format!("ConwayRewarding ({})", reward_account.to_haskell_str()),
+            Certifying(cert_index) => format!("ConwayCertifying ({})", cert_index.to_haskell_str()),
+            Voting(gov_id) => format!("ConwayVoting ({})", gov_id.to_haskell_str()),
+            Proposing(proposal_id) => format!("ConwayProposing ({})", proposal_id.to_haskell_str()),
+        }
+    }
+}
+impl<T> HaskellDisplay for StrictMaybe<T>
+where
+    T: HaskellDisplay,
+{
+    fn to_haskell_str(&self) -> String {
+        match self {
+            StrictMaybe::Just(v) => format!("SJust ({})", v.to_haskell_str()),
+            StrictMaybe::Nothing => "SNothing".to_string(),
+        }
+    }
+}
+impl<T> HaskellDisplayParentesis for StrictMaybe<T>
+where
+    T: HaskellDisplay,
+{
+    fn to_haskell_str_p(&self) -> String {
+        match self {
+            StrictMaybe::Just(v) => format!("(SJust ({}))", v.to_haskell_str()),
+            StrictMaybe::Nothing => "SNothing".to_string(),
+        }
+    }
+}
+
+impl HaskellDisplay for VKeyWitness
+ 
+{
+    fn to_haskell_str(&self) -> String {
+        format!(
+         
+            "VKeyWitness {{ vkey: {}, signature: {} }}",
+            self.vkey,
+            self.signature
+        )
+    }
+}
+
+impl <T> HaskellDisplay for Array<T>
+where
+    T: HaskellDisplay,
+{
+    fn to_haskell_str(&self) -> String {
+        let value = self.0.iter().map(|item| item.to_haskell_str()).collect::<Vec<_>>().join(", ");
+        format!("[{}]", value)
+        
+
+    }
+}
+
+impl HaskellDisplay for DatumHash {
+    fn to_haskell_str(&self) -> String {
+        format!("DatumHash \"{}\"", hex::encode(self.as_ref()))
+    }
+}
+
 // HELPER FUNCTIONS
 
 fn display_governance_action_id_index(index: &u32) -> String {
