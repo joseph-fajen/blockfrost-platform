@@ -172,10 +172,7 @@ impl fmt::Display for ApplyConwayTxPredError {
                     })
                     .collect::<String>();
 
-                write!(
-                    f,
-                    "ConwayMempoolFailure \"{}\"",t
-            )
+                write!(f, "ConwayMempoolFailure \"{}\"", t)
             }
         }
     }
@@ -199,7 +196,7 @@ pub enum ConwayUtxoWPredFailure {
     NotAllowedSupplementalDatums(CustomSet258<SafeHash>, CustomSet258<DatumHash>), // set of unallowed data hashes, set of acceptable data hashes
     PPViewHashesDontMatch(StrictMaybe<SafeHash>, StrictMaybe<SafeHash>),
     UnspendableUTxONoDatumHash(Vec<SerializableTxIn>), //  Set of transaction inputs that are TwoPhase scripts, and should have a DataHash but don't
-    ExtraRedeemers(Array<PlutusPurpose>),                // List of redeemers not needed
+    ExtraRedeemers(Array<PlutusPurpose>),              // List of redeemers not needed
     MalformedScriptWitnesses(CustomSet258<ScriptHash>),
     MalformedReferenceScripts(CustomSet258<ScriptHash>),
 }
@@ -211,8 +208,12 @@ impl fmt::Display for ConwayUtxoWPredFailure {
         match self {
             UtxoFailure(e) => write!(f, "UtxoFailure ({})", e),
             InvalidWitnessesUTXOW(e) => write!(f, "InvalidWitnessesUTXOW [{}]", e.to_haskell_str()),
-            MissingVKeyWitnessesUTXOW(e) => write!(f, "MissingVKeyWitnessesUTXOW ({})", e.to_haskell_str()),
-            MissingScriptWitnessesUTXOW(e) => write!(f, "MissingScriptWitnessesUTXOW ({})", e.to_haskell_str()),
+            MissingVKeyWitnessesUTXOW(e) => {
+                write!(f, "MissingVKeyWitnessesUTXOW ({})", e.to_haskell_str())
+            }
+            MissingScriptWitnessesUTXOW(e) => {
+                write!(f, "MissingScriptWitnessesUTXOW ({})", e.to_haskell_str())
+            }
             ScriptWitnessNotValidatingUTXOW(e) => {
                 write!(f, "ScriptWitnessNotValidatingUTXOW ({})", e)
             }
@@ -371,11 +372,14 @@ pub enum ConwayGovPredFailure {
     DisallowedVoters(Vec<(Voter, GovActionId)>), // !(NonEmpty (Voter (EraCrypto era), GovActionId (EraCrypto era)))
     ConflictingCommitteeUpdate(CustomSet258<Credential>), // (Set.Set (Credential 'ColdCommitteeRole (EraCrypto era)))
     ExpirationEpochTooSmall(HashMap<StakeCredential, EpochNo>), // Probably wrong credintial type!, epochno
-    InvalidPrevGovActionId(ProposalProcedure),                             // (ProposalProcedure era)
+    InvalidPrevGovActionId(ProposalProcedure),                  // (ProposalProcedure era)
     VotingOnExpiredGovAction(Vec<(Voter, GovActionId)>), // (NonEmpty (Voter (EraCrypto era), GovActionId (EraCrypto era)))
     ProposalCantFollow(String), //        (StrictMaybe (GovPurposeId 'HardForkPurpose era)) |
-    InvalidPolicyHash(StrictMaybe<DisplayScriptHash>, StrictMaybe<DisplayScriptHash>), //        (StrictMaybe (ScriptHash (EraCrypto era)))    (StrictMaybe (ScriptHash (EraCrypto era)))
-    DisallowedProposalDuringBootstrap(ProposalProcedure),          // (ProposalProcedure era)
+    InvalidPolicyHash(
+        StrictMaybe<DisplayScriptHash>,
+        StrictMaybe<DisplayScriptHash>,
+    ), //        (StrictMaybe (ScriptHash (EraCrypto era)))    (StrictMaybe (ScriptHash (EraCrypto era)))
+    DisallowedProposalDuringBootstrap(ProposalProcedure), // (ProposalProcedure era)
     DisallowedVotesDuringBootstrap(Vec<(Voter, GovActionId)>), //        (NonEmpty (Voter (EraCrypto era), GovActionId (EraCrypto era)))
     VotersDoNotExist(Vec<Voter>),                              // (NonEmpty (Voter (EraCrypto era)))
     ZeroTreasuryWithdrawals(String),                           // (GovAction era)
@@ -410,7 +414,9 @@ impl fmt::Display for ConwayGovPredFailure {
             ExpirationEpochTooSmall(map) => {
                 write!(f, "ExpirationEpochTooSmall ({})", map.to_haskell_str())
             }
-            InvalidPrevGovActionId(s) => write!(f, "InvalidPrevGovActionId ({})", s.to_haskell_str()),
+            InvalidPrevGovActionId(s) => {
+                write!(f, "InvalidPrevGovActionId ({})", s.to_haskell_str())
+            }
             VotingOnExpiredGovAction(vec) => {
                 write!(f, "VotingOnExpiredGovAction ({})", vec.to_haskell_str())
             }
@@ -466,12 +472,10 @@ impl fmt::Display for ConwayCertsPredFailure {
 // https://github.com/IntersectMBO/cardano-ledger/blob/33e90ea03447b44a389985ca2b158568e5f4ad65/eras/conway/impl/src/Cardano/Ledger/Conway/Rules/Cert.hs#L102
 #[derive(Debug)]
 pub enum ConwayCertPredFailure {
-    DelegFailure(ConwayDelegPredFailure), 
-    PoolFailure(String),  // TODO
+    DelegFailure(ConwayDelegPredFailure),
+    PoolFailure(String), // TODO
     GovCertFailure(ConwayGovCertPredFailure),
 }
-
-
 
 // https://github.com/IntersectMBO/cardano-ledger/blob/33e90ea03447b44a389985ca2b158568e5f4ad65/eras/conway/impl/src/Cardano/Ledger/Conway/Rules/GovCert.hs#L118C6-L118C30
 #[derive(Debug)]
@@ -487,18 +491,17 @@ pub enum ConwayGovCertPredFailure {
 // https://github.com/IntersectMBO/cardano-ledger/blob/b14ba8190e21ced6cc68c18a02dd1dbc2ff45a3c/eras/conway/impl/src/Cardano/Ledger/Conway/Rules/Deleg.hs#L104
 #[derive(Debug)]
 pub enum ConwayDelegPredFailure {
-    IncorrectDepositDELEG(Coin) ,
-   StakeKeyRegisteredDELEG(String),
-   StakeKeyNotRegisteredDELEG(String) ,
-      StakeKeyHasNonZeroRewardAccountBalanceDELEG(String) ,
-     DelegateeDRepNotRegisteredDELEG(Credential),
-      DelegateeStakePoolNotRegisteredDELEG (String)
+    IncorrectDepositDELEG(Coin),
+    StakeKeyRegisteredDELEG(String),
+    StakeKeyNotRegisteredDELEG(String),
+    StakeKeyHasNonZeroRewardAccountBalanceDELEG(String),
+    DelegateeDRepNotRegisteredDELEG(Credential),
+    DelegateeStakePoolNotRegisteredDELEG(String),
 }
 
 // this type can be used inside a StrictMaybe
 #[derive(Debug, Decode)]
 pub struct DisplayScriptHash(#[n(0)] pub ScriptHash);
-
 
 // https://github.com/IntersectMBO/cardano-ledger/blob/f54489071f4faa4b6209e1ba5288507c824cca50/libs/cardano-ledger-core/src/Cardano/Ledger/Address.hs
 // the bytes are not decoded
@@ -513,13 +516,13 @@ pub enum PlutusPurpose {
     Certifying(AsIx), // 2
     Rewarding(AsIx),  // 3
     Voting(AsIx),
-    Proposing(AsIx)
+    Proposing(AsIx),
 }
-#[derive(Debug,Decode)]
+#[derive(Debug, Decode)]
 #[cbor(transparent)]
-pub struct AsIx(#[n(0)]pub u16);
+pub struct AsIx(#[n(0)] pub u16);
 
-#[derive(Debug,Decode)]
+#[derive(Debug, Decode)]
 #[cbor(transparent)]
 pub struct Array<T>(#[n(0)] pub Vec<T>);
 
@@ -669,16 +672,16 @@ pub struct RewardAccountFielded {
 
 impl RewardAccountFielded {
     pub fn new(hex: String) -> Self {
-       
-       /*  let ra_network = if hex.starts_with("e0") {
-            Network::Testnet
-        } else {
-            Network::Mainnet
-        };
-*/
+        /*  let ra_network = if hex.starts_with("e0") {
+                    Network::Testnet
+                } else {
+                    Network::Mainnet
+                };
+        */
         let bytes = hex::decode(&hex).expect("Invalid hex string");
 
-        let ra_network = if bytes[0] & 0b00000001 != 0 { // Is Mainnet Address
+        let ra_network = if bytes[0] & 0b00000001 != 0 {
+            // Is Mainnet Address
             Network::Mainnet
         } else {
             Network::Testnet
@@ -686,17 +689,16 @@ impl RewardAccountFielded {
 
         let mut hash = [0; 28];
         hash.copy_from_slice(&bytes[1..]);
-        let ra_credential = if &bytes[0] & 0b00010000 != 0 { // Account Credential is a Script
+        let ra_credential = if &bytes[0] & 0b00010000 != 0 {
+            // Account Credential is a Script
             StakeCredential::ScriptHash(hash.into())
         } else {
             StakeCredential::AddrKeyhash(hash.into())
         };
 
-        
-
         //let bytes = hex::decode(hex[2..].to_string()).expect("Invalid hex string");
 
-       // let ra_credential = Credential::KeyHashObj(KeyHash(bytes.into()));
+        // let ra_credential = Credential::KeyHashObj(KeyHash(bytes.into()));
         Self {
             ra_network,
             ra_credential,
@@ -709,7 +711,8 @@ impl fmt::Display for RewardAccountFielded {
         write!(
             f,
             "RewardAccount {{raNetwork = {}, raCredential = {}}}",
-            self.ra_network, self.ra_credential.to_haskell_str()
+            self.ra_network,
+            self.ra_credential.to_haskell_str()
         )
     }
 }

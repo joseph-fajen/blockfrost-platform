@@ -6,9 +6,14 @@ use crate::cbor::haskell_types::{
     PlutusPurpose, ShelleyBasedEra, StrictMaybe, TxValidationError, Utxo,
 };
 
-use super::{haskell_display::HaskellDisplay, haskell_types::{
-    ConwayCertPredFailure, ConwayCertsPredFailure, ConwayDelegPredFailure, ConwayGovCertPredFailure, ConwayGovPredFailure, Credential, CustomSet258, Network, RewardAccountFielded
-}};
+use super::{
+    haskell_display::HaskellDisplay,
+    haskell_types::{
+        ConwayCertPredFailure, ConwayCertsPredFailure, ConwayDelegPredFailure,
+        ConwayGovCertPredFailure, ConwayGovPredFailure, Credential, CustomSet258, Network,
+        RewardAccountFielded,
+    },
+};
 
 impl<'b> Decode<'b, ()> for TxValidationError {
     fn decode(d: &mut Decoder<'b>, _ctx: &mut ()) -> Result<Self, decode::Error> {
@@ -170,7 +175,7 @@ impl<'b> Decode<'b, ()> for ConwayGovPredFailure {
             9 => Ok(VotingOnExpiredGovAction(d.decode()?)),
 
             10 => Ok(ProposalCantFollow(d.decode()?)),
-            11 =>  Ok(InvalidPolicyHash(d.decode()?, d.decode()?)),
+            11 => Ok(InvalidPolicyHash(d.decode()?, d.decode()?)),
             12 => Ok(DisallowedProposalDuringBootstrap(d.decode()?)),
             13 => Ok(DisallowedVotesDuringBootstrap(d.decode()?)),
             14 => Ok(VotersDoNotExist(d.decode()?)),
@@ -272,17 +277,15 @@ where
     T: Decode<'b, ()> + HaskellDisplay,
 {
     fn decode(d: &mut Decoder<'b>, _ctx: &mut ()) -> Result<Self, decode::Error> {
-        
         let pos = d.position();
 
         let arr = d.array()?;
 
         match arr {
-            Some(len) if len > 0 => 
-            {
+            Some(len) if len > 0 => {
                 d.set_position(pos);
                 Ok(StrictMaybe::Just(d.decode()?))
-            },
+            }
             _ => Ok(StrictMaybe::Nothing),
         }
     }
