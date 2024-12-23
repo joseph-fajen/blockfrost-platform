@@ -131,6 +131,8 @@ mod tests {
     use super::*;
 
     #[test]
+    // TODO: Do we really need this? Wouldn’t it be enough to `verify_one()`
+    // with a CBOR representing 2+ errors?
     fn test_generate_error_response_with_multiple_errors() {
         let validation_error = ShelleyTxValidationError {
             error: ApplyTxError(vec![
@@ -140,13 +142,30 @@ mod tests {
             era: ShelleyBasedEraConway,
         };
 
-        let error_string = serde_json::to_string(
+        let error_string = serde_json::to_value(
             &NodeClient::_unused_i_i_i_i_i_i_i_generate_error_response(validation_error),
         )
         .expect("Failed to convert error to JSON");
-        let expected_error_string = r#"{"tag":"TxSubmitFail","contents":{"tag":"TxCmdTxSubmitValidationError","contents":{"tag":"TxValidationErrorInCardanoMode","contents":{"kind":"ShelleyTxValidationError","error":["MempoolFailure (error1)","MempoolFailure (error2)"],"era":"ShelleyBasedEraConway"}}}}"#;
 
-        assert_eq!(error_string, expected_error_string);
+        let expected_error = serde_json::json!({
+          "tag": "TxSubmitFail",
+          "contents": {
+            "tag": "TxCmdTxSubmitValidationError",
+            "contents": {
+              "tag": "TxValidationErrorInCardanoMode",
+              "contents": {
+                "kind": "ShelleyTxValidationError",
+                "error": [
+                  "ConwayMempoolFailure \"error1\"",
+                  "ConwayMempoolFailure \"error2\""
+                ],
+                "era": "ShelleyBasedEraConway"
+              }
+            }
+          }
+        });
+
+        crate::cbor::tests::assert_json_eq!(error_string, expected_error);
     }
 
     #[test]
@@ -186,6 +205,7 @@ mod tests {
     }
 
     #[test]
+    // #[ignore] // FIXME: the 101.json is not ApplyTxError, but Data.Text, so it fails here:
     fn test_decoding_with_cases() {
         let case_files = get_file_list_from_folder();
 
