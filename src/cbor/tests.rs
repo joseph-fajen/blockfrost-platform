@@ -3,6 +3,7 @@ use serde::Deserialize;
 use std::process::Command;
 
 mod haskells_show_string;
+mod random;
 mod specific;
 
 #[derive(Deserialize, Debug)]
@@ -37,7 +38,7 @@ pub enum CaseType {
 
 pub fn generate_cases(
     case_type: CaseType,
-    num_cases: u16,
+    num_cases: u32,
     generator_size: u16,
     seed: Option<u64>,
 ) -> Result<CborTestCases, String> {
@@ -87,6 +88,8 @@ macro_rules! assert_json_eq {
         }
     };
 }
+
+pub(crate) use assert_json_eq; // export it
 
 /// This function takes a CBOR-encoded `ApplyTxErr`, and verifies our
 /// deserializer against the Haskell one. Use it for specific cases.

@@ -4,4 +4,4 @@ pub mod haskell_display;
 pub mod haskell_types;
 
 #[cfg(test)]
-mod tests;
+pub mod tests;
