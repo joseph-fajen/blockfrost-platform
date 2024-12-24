@@ -296,7 +296,7 @@ static GLOBAL_INSTANCE: LazyLock<FallbackDecoder> = LazyLock::new(FallbackDecode
 mod tests {
     use super::*;
     #[tokio::test]
-    #[tracing_test::traced_test]
+    //#[tracing_test::traced_test]
     async fn test_fallback_decoder() {
         FallbackDecoder::locate_child_binary().unwrap();
 

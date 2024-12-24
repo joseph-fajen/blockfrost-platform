@@ -98,8 +98,16 @@ async fn verify_one(cbor: &str) {
 
     let cbor = hex::decode(cbor).unwrap();
     let reference_json = FallbackDecoder::instance().decode(&cbor).await.unwrap();
+
+    let our_decoding = NodeClient::try_decode_error(&cbor).unwrap_or_else(|err| panic!(
+        "Rust deserializer failed to decode:\n  CBOR:\n    {}\n  Error:\n    {}\n  Haskell:\n    {}",
+        hex::encode(cbor),
+        format!("{:?}", err).replace("\n", "\n    "),
+        serde_json::to_string_pretty(&reference_json).unwrap().replace("\n", "\n    ")
+    ));
+
     let our_json = serde_json::to_value(NodeClient::_unused_i_i_i_i_i_i_i_generate_error_response(
-        NodeClient::try_decode_error(&cbor).unwrap(),
+        our_decoding,
     ))
     .unwrap();
     assert_json_eq!(reference_json, our_json)
