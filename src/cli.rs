@@ -85,7 +85,7 @@ impl Args {
         Ok(merge(&from_file, self)?)
     }
 
-    pub fn to_file(&self, file_path: &str) -> Result<()> {
+    pub fn to_file(&self, file_path: &PathBuf) -> Result<()> {
         let toml_string =
             toml::to_string(self).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
         let mut file = fs::File::create(file_path)?;
@@ -307,12 +307,23 @@ impl Config {
             app_config.secret = Some(secret);
         }
 
-        let file_path = std::env::current_dir().unwrap().join("blockfrost.toml");
-        app_config.to_file(file_path.to_str().unwrap())?;
-        println!("Config has been written to {:?}", file_path);
+        let config_path = get_config_path();
+        if let Some(parent) = config_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        app_config.to_file(&config_path)?;
+        println!("Config has been written to {:?}", config_path);
 
         std::process::exit(0);
     }
+}
+
+fn get_config_path() -> PathBuf {
+    dirs::config_dir()
+        .expect("Could not determine config directory")
+        .join("blockfrost")
+        .join("config.toml")
 }
 
 // Implement conversion from LogLevel enum to tracing::Level
