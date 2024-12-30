@@ -253,7 +253,7 @@ impl Config {
             .map_err(|e| anyhow!(e))
             .and_then(|it| it.parse::<u16>().map_err(|e| anyhow!(e)))?;
 
-        let node_socket_path = Text::new("Enter patht to Cardano node socket:")
+        let node_socket_path = Text::new("Enter path to Cardano node socket:")
             .with_validator(|input: &str| {
                 if input.is_empty() {
                     Ok(Validation::Invalid(ErrorMessage::Custom(
