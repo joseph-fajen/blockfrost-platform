@@ -4,7 +4,6 @@ use inquire::{
     validator::{ErrorMessage, Validation},
     Confirm, Select, Text,
 };
-use merge_struct::merge;
 use pallas_network::miniprotocols::{MAINNET_MAGIC, PREPROD_MAGIC, PREVIEW_MAGIC};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -82,7 +81,7 @@ impl Args {
     pub fn from_file(&self) -> Result<Self> {
         let contents = fs::read_to_string(self.config.clone().unwrap())?;
         let from_file: Args = toml::from_str(&contents)?;
-        Ok(merge(&from_file, self)?)
+        Ok(merge_struct::merge(&from_file, self)?)
     }
 
     pub fn to_file(&self, file_path: &PathBuf) -> Result<()> {
