@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use clap::{arg, command, Parser, ValueEnum};
+use clap::{arg, command, Parser, Subcommand, ValueEnum};
 use inquire::{
     validator::{ErrorMessage, Validation},
     Confirm, Select, Text,
@@ -15,6 +15,19 @@ use std::{
 use toml;
 use tracing::Level;
 
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+pub struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum Commands {
+    Run(RunArgs),
+    Init,
+}
+
 fn default_ip() -> String {
     "0.0.0.0".to_string()
 }
@@ -24,7 +37,7 @@ fn default_port() -> u16 {
 
 #[derive(Parser, Debug, Serialize, Deserialize)]
 #[command(author, version, about, long_about = None)]
-pub struct Args {
+pub struct RunArgs {
     #[serde(default = "default_ip")]
     #[arg(long, default_value = "0.0.0.0")]
     server_address: String,
@@ -33,14 +46,14 @@ pub struct Args {
     #[arg(long, default_value = "3000")]
     server_port: u16,
 
-    #[arg(long, required_unless_present_any(&["init", "config"]))]
+    #[arg(long, required_unless_present_any(&["config"]))]
     network: Option<Network>,
 
     #[serde(default = "LogLevel::default_log_level")]
     #[arg(long, default_value = "info")]
     log_level: LogLevel,
 
-    #[arg(long, required_unless_present_any(&["init", "config"]))]
+    #[arg(long, required_unless_present_any(&["config"]))]
     node_socket_path: Option<String>,
 
     #[serde(default = "Mode::default_mode")]
@@ -53,16 +66,12 @@ pub struct Args {
     solitary: bool,
 
     #[serde(skip)]
-    #[arg(long, conflicts_with_all(&["server_address", "server_port", "network", "log_level", "node_socket_path", "mode", "solitary", "secret", "reward_address", "config"]))]
-    init: bool,
-
-    #[serde(skip)]
     #[arg(long)]
     config: Option<PathBuf>,
 
     #[arg(
         long,
-        required_unless_present_any(&["solitary", "init", "config"]),
+        required_unless_present_any(&["solitary", "config"]),
         conflicts_with("solitary"),
         requires("reward_address")
     )]
@@ -70,17 +79,17 @@ pub struct Args {
 
     #[arg(
         long,
-        required_unless_present_any(&["solitary", "init", "config"]),
+        required_unless_present_any(&["solitary", "config"]),
         conflicts_with("solitary"),
         requires("secret")
     )]
     reward_address: Option<String>,
 }
 
-impl Args {
+impl RunArgs {
     pub fn from_file(&self) -> Result<Self> {
         let contents = fs::read_to_string(self.config.clone().unwrap())?;
-        let from_file: Args = toml::from_str(&contents)?;
+        let from_file: RunArgs = toml::from_str(&contents)?;
         Ok(merge_struct::merge(&from_file, self)?)
     }
 
@@ -191,18 +200,24 @@ fn enum_prompt<T: std::fmt::Debug>(message: &str, enum_values: &[T]) -> Result<S
 }
 
 impl Config {
-    pub fn init(args: Args) -> Result<Self> {
-        if args.init {
+    pub fn init(cli: Cli) -> Result<Self> {
+        if let Commands::Init = cli.command {
             Self::generate_config()?;
         }
 
-        let config_path = match args.config {
-            Some(ref path) if !path.exists() => {
-                println!("Config file does not exist");
-                std::process::exit(1);
+        let config_path: RunArgs = if let Commands::Run(args) = cli.command {
+            if let Some(ref path) = args.config {
+                if !path.exists() {
+                    println!("Config file does not exist");
+                    std::process::exit(1);
+                } else {
+                    args.from_file()?
+                }
+            } else {
+                args
             }
-            Some(_) => args.from_file()?,
-            None => args,
+        } else {
+            panic!("Expected `Commands::Run`, but got something else.");
         };
 
         Ok(config_path.to_config())
@@ -264,8 +279,7 @@ impl Config {
             })
             .prompt()?;
 
-        let mut app_config = Args {
-            init: false,
+        let mut app_config = RunArgs {
             config: None,
             solitary: is_solitary,
             network: Some(network),

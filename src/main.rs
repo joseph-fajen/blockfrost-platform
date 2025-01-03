@@ -9,7 +9,7 @@ use blockfrost_platform::{
     api::{self, metrics::setup_metrics_recorder, root, tx_submit},
     background_tasks::node_health_check_task,
     cbor::fallback_decoder::FallbackDecoder,
-    cli::{Args, Config},
+    cli::{Cli, Config},
     errors::{AppError, BlockfrostError},
     icebreakers_api::IcebreakersAPI,
     logging::setup_tracing,
@@ -23,9 +23,9 @@ use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let arguments = Args::parse();
+    let cli = Cli::parse();
 
-    let config = Config::init(arguments)?;
+    let config = Config::init(cli)?;
 
     // Setup logging
     setup_tracing(&config);
