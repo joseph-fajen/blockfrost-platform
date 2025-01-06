@@ -46,14 +46,14 @@ pub struct RunArgs {
     #[arg(long, default_value = "3000")]
     server_port: u16,
 
-    #[arg(long, required_unless_present_any(&["config"]))]
+    #[arg(long, required_unless_present = "config")]
     network: Option<Network>,
 
     #[serde(default = "LogLevel::default_log_level")]
     #[arg(long, default_value = "info")]
     log_level: LogLevel,
 
-    #[arg(long, required_unless_present_any(&["config"]))]
+    #[arg(long, required_unless_present = "config")]
     node_socket_path: Option<String>,
 
     #[serde(default = "Mode::default_mode")]
@@ -201,26 +201,25 @@ fn enum_prompt<T: std::fmt::Debug>(message: &str, enum_values: &[T]) -> Result<S
 
 impl Config {
     pub fn init(cli: Cli) -> Result<Self> {
-        if let Commands::Init = cli.command {
-            Self::generate_config()?;
-        }
-
-        let config_path: RunArgs = if let Commands::Run(args) = cli.command {
-            if let Some(ref path) = args.config {
-                if !path.exists() {
-                    println!("Config file does not exist");
-                    std::process::exit(1);
-                } else {
-                    args.from_file()?
-                }
-            } else {
-                args
+        match cli.command {
+            Commands::Init => {
+                Self::generate_config()?;
+                panic!("Expected `Commands::Run`, but got `Commands::Init`.");
             }
-        } else {
-            panic!("Expected `Commands::Run`, but got something else.");
-        };
-
-        Ok(config_path.to_config())
+            Commands::Run(args) => {
+                let config_path = if let Some(ref path) = args.config {
+                    if !path.exists() {
+                        println!("Config file does not exist");
+                        std::process::exit(1);
+                    } else {
+                        args.from_file()?
+                    }
+                } else {
+                    args
+                };
+                Ok(config_path.to_config())
+            }
+        }
     }
 
     fn generate_config() -> Result<()> {
