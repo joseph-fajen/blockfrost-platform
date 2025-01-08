@@ -1,17 +1,15 @@
-use pallas_codec::minicbor::{decode, Decode, Decoder};
-use pallas_primitives::{Nullable, ScriptHash};
+use pallas_addresses::Address;
+use pallas_codec::minicbor::{self, decode, Decode, Decoder};
+use pallas_primitives::{Bytes, Nullable, ScriptHash};
 
 use crate::cbor::haskell_types::{
-    ApplyConwayTxPredError, ApplyTxError, ConwayUtxoPredFailure, ConwayUtxoWPredFailure,
-    PlutusPurpose, ShelleyBasedEra, StrictMaybe, TxValidationError, Utxo,
+    ApplyConwayTxPredError, ApplyTxError, ConwayUtxoPredFailure, ConwayUtxoWPredFailure, MultiAsset, PlutusPurpose, ShelleyBasedEra, StrictMaybe, TxValidationError, Utxo
 };
 
 use super::{
     haskell_display::HaskellDisplay,
     haskell_types::{
-        ConwayCertPredFailure, ConwayCertsPredFailure, ConwayDelegPredFailure,
-        ConwayGovCertPredFailure, ConwayGovPredFailure, Credential, CustomSet258, Network,
-        RewardAccountFielded,
+        BabbageTxOut, ConwayCertPredFailure, ConwayCertsPredFailure, ConwayDelegPredFailure, ConwayGovCertPredFailure, ConwayGovPredFailure, Credential, CustomSet258, DisplayValue, Network, RewardAccountFielded
     },
 };
 
@@ -98,10 +96,7 @@ impl<'b> Decode<'b, ()> for ConwayUtxoWPredFailure {
             13 => Ok(PPViewHashesDontMatch(d.decode()?, d.decode()?)),
             14 => Ok(UnspendableUTxONoDatumHash(d.decode()?)),
             15 => Ok(ExtraRedeemers(d.decode()?)),
-            16 => {
-                let t = d.tag(); // we are ignoring the unknown tag 258 here
-                Ok(MalformedScriptWitnesses(d.decode()?))
-            }
+            16 => Ok(MalformedScriptWitnesses(d.decode()?)),
             17 => Ok(MalformedReferenceScripts(d.decode()?)),
             _ => Err(decode::Error::message(format!(
                 "unknown error tag while decoding ConwayUtxoWPredFailure: {}",
@@ -276,17 +271,36 @@ impl<'b, T> Decode<'b, ()> for StrictMaybe<T>
 where
     T: Decode<'b, ()> + HaskellDisplay,
 {
-    fn decode(d: &mut Decoder<'b>, _ctx: &mut ()) -> Result<Self, decode::Error> {
+    fn decode(d: &mut Decoder<'b>, ctx: &mut ()) -> Result<Self, decode::Error> {
         let pos = d.position();
-
         let arr = d.array()?;
+       // d.set_position(pos);
 
+        // d.datatype()?;
+/*
+        match d.datatype()? {
+            minicbor::data::Type::Null => {
+                d.null()?;
+                Ok(Self::Null)
+            }
+            minicbor::data::Type::Undefined => {
+                d.undefined()?;
+                Ok(Self::Undefined)
+            }
+            _ => {
+                let x = d.decode_with(ctx)?;
+                Ok(Self::Some(x))
+            }
+        }
+         */
         match arr {
             Some(len) if len > 0 => {
-                d.set_position(pos);
-                Ok(StrictMaybe::Just(d.decode()?))
+                Ok(StrictMaybe::Just(d.decode_with(ctx)?))
             }
-            _ => Ok(StrictMaybe::Nothing),
+            _ => {
+              //  d.skip()?;
+                Ok(StrictMaybe::Nothing)
+            },
         }
     }
 }
@@ -357,6 +371,48 @@ impl<'b> Decode<'b, ()> for PlutusPurpose {
                 purpose
             ))),
         }
+    }
+}
+
+
+// https://github.com/IntersectMBO/cardano-ledger/blob/ea1d4362226d29ce7e42f4ba83ffeecedd9f0565/eras/babbage/impl/src/Cardano/Ledger/Babbage/TxOut.hs#L484
+impl<'b> Decode<'b, ()> for BabbageTxOut {
+    fn decode(d: &mut Decoder<'b>, _ctx: &mut ()) -> Result<Self, decode::Error> {
+        let len = d.map()?;
+        match len {
+            Some(2) => { 
+                
+                Ok(BabbageTxOut::NotImplemented)
+            },
+            Some(3) => {
+                Ok(BabbageTxOut::NotImplemented)
+            },
+            Some(4) => {
+
+                // key 0
+                d.u8()?;
+                let addr = Address::from_bytes(d.bytes()?).unwrap();
+
+                
+                // key 1
+                d.u8()?;
+                d.array()?;
+                let value: DisplayValue = d.decode()?;
+                let multiAsset: MultiAsset = d.decode()?;
+
+                println!("BabbageTxOut::MaryTxOut: addr: {}, value: {}, multiAsset: {:?}", addr, value, multiAsset);
+
+                Ok(BabbageTxOut::NotImplemented)
+            },
+            None => { // indef map
+                Ok(BabbageTxOut::NotImplemented)
+            }
+            _ => Err(decode::Error::message(format!(
+                "unexpected number of fields while decoding BabbageTxOut: {}",
+                len.unwrap_or(0)
+            ))),
+        }
+       
     }
 }
 
