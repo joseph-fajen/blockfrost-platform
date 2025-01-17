@@ -2,23 +2,22 @@ use super::fallback_decoder::FallbackDecoder;
 use serde::Deserialize;
 use std::process::Command;
 
-mod haskells_show_string;
 mod random;
 mod specific;
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all(deserialize = "camelCase"))]
 pub struct CborTestCases {
-    seed: u64,
-    test_cases: Vec<CborTestCase>,
+    pub seed: u64,
+    pub test_cases: Vec<CborTestCase>,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all(deserialize = "camelCase"))]
 pub struct CborTestCase {
-    cbor: String,
-    haskell_repr: String,
-    json: serde_json::Value,
+    pub cbor: String,
+    pub haskell_repr: String,
+    pub json: serde_json::Value,
 }
 
 #[derive(Debug)]

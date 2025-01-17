@@ -1,27 +1,9 @@
-use super::{generate_cases, CaseType};
-
-#[test]
-fn proptest_data_text_1000_large() {
-    let cases = generate_cases(CaseType::DataText, 1000, 1000, None).unwrap();
-
-    for case in cases.test_cases {
-        let json_encoding: String = serde_json::to_string(&case.json).unwrap();
-        let normal_string: String = serde_json::from_value(case.json).unwrap();
-        let rust_emulation = haskell_show_string(&normal_string);
-        assert_eq!(
-            case.haskell_repr, rust_emulation,
-            "\n\n   JSON encoding: {}\n    Haskell Show: {}\n  Rust emulation: {}\n",
-            json_encoding, case.haskell_repr, rust_emulation
-        );
-    }
-}
-
 /// Haskell’s `Data.Text` (and `Data.String`) have "slightly" non-standard way
 /// of displaying non-printable Unicode characters in their `Show` instances.
 /// Let’s make sure we replicate that correctly in Rust.
-fn haskell_show_string(s: &str) -> String {
+pub(crate) fn haskell_show_string(s: &str) -> String {
     fn is_oct_digit(c: char) -> bool {
-        c >= '0' && c <= '7'
+        ('0'..='7').contains(&c)
     }
 
     let mut result = String::new();
@@ -33,14 +15,14 @@ fn haskell_show_string(s: &str) -> String {
         match c {
             '\\' => result.push_str("\\\\"),
             '"' => result.push_str("\\\""),
-            '\x07' => result.push_str("\\a"),            // Bell
-            '\x08' => result.push_str("\\b"),            // Backspace
-            '\x0C' => result.push_str("\\f"),            // Form Feed
-            '\x0A' => result.push_str("\\n"),            // Line Feed
-            '\x0D' => result.push_str("\\r"),            // Carriage Return
-            '\x09' => result.push_str("\\t"),            // Horizontal Tab
-            '\x0B' => result.push_str("\\v"),            // Vertical Tab
-            c if c >= ' ' && c <= '~' => result.push(c), // Printable ASCII
+            '\x07' => result.push_str("\\a"),                // Bell
+            '\x08' => result.push_str("\\b"),                // Backspace
+            '\x0C' => result.push_str("\\f"),                // Form Feed
+            '\x0A' => result.push_str("\\n"),                // Line Feed
+            '\x0D' => result.push_str("\\r"),                // Carriage Return
+            '\x09' => result.push_str("\\t"),                // Horizontal Tab
+            '\x0B' => result.push_str("\\v"),                // Vertical Tab
+            c if (' '..='~').contains(&c) => result.push(c), // Printable ASCII
             c => {
                 let abbreviation = match c {
                     '\x00' => "NUL",
@@ -113,4 +95,23 @@ fn haskell_show_string(s: &str) -> String {
 
     result.push('"');
     result
+}
+
+#[cfg(test)]
+use super::tests::{generate_cases, CaseType};
+
+#[test]
+fn proptest_data_text_1000_large() {
+    let cases = generate_cases(CaseType::DataText, 1000, 1000, None).unwrap();
+
+    for case in cases.test_cases {
+        let json_encoding: String = serde_json::to_string(&case.json).unwrap();
+        let normal_string: String = serde_json::from_value(case.json).unwrap();
+        let rust_emulation = haskell_show_string(&normal_string);
+        assert_eq!(
+            case.haskell_repr, rust_emulation,
+            "\n\n   JSON encoding: {}\n    Haskell Show: {}\n  Rust emulation: {}\n",
+            json_encoding, case.haskell_repr, rust_emulation
+        );
+    }
 }

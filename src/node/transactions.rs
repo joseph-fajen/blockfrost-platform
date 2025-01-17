@@ -1,8 +1,5 @@
 use super::connection::NodeClient;
-use crate::{
-    cbor::haskell_types::{TxSubmitFail, TxValidationError},
-    BlockfrostError,
-};
+use crate::{cbor::haskell_types::TxValidationError, BlockfrostError};
 use pallas_codec::minicbor::Decoder;
 use pallas_crypto::hash::Hasher;
 use pallas_network::{
@@ -104,13 +101,15 @@ impl NodeClient {
 
     #[cfg(test)]
     /// Mimicks the data structure of the error response from the cardano-submit-api
-    pub fn _unused_i_i_i_i_i_i_i_generate_error_response(error: TxValidationError) -> TxSubmitFail {
+    pub fn _unused_i_i_i_i_i_i_i_generate_error_response(
+        error: TxValidationError,
+    ) -> crate::cbor::haskell_types::TxSubmitFail {
         use crate::cbor::haskell_types::{
-            TxCmdError::TxCmdTxSubmitValidationError, TxSubmitFail::TxSubmitFail,
+            TxCmdError::TxCmdTxSubmitValidationError, TxSubmitFail,
             TxValidationErrorInCardanoMode::TxValidationErrorInCardanoMode,
         };
 
-        TxSubmitFail(TxCmdTxSubmitValidationError(
+        TxSubmitFail::TxSubmitFail(TxCmdTxSubmitValidationError(
             TxValidationErrorInCardanoMode(error),
         ))
     }
@@ -118,14 +117,14 @@ impl NodeClient {
 
 #[cfg(test)]
 mod tests {
+    use pallas_codec::minicbor::display;
     use std::{fs, io};
 
-    use pallas_codec::minicbor::display;
-    use serde::Deserialize;
-    use serde_json::Value;
-
-    use crate::cbor::haskell_types::{
-        ApplyConwayTxPredError::*, ApplyTxError, ShelleyBasedEra::*, TxValidationError::*,
+    use crate::cbor::{
+        haskell_types::{
+            ApplyConwayTxPredError::*, ApplyTxError, ShelleyBasedEra::*, TxValidationError::*,
+        },
+        tests::CborTestCases,
     };
 
     use super::*;
@@ -143,7 +142,7 @@ mod tests {
         };
 
         let error_string = serde_json::to_value(
-            &NodeClient::_unused_i_i_i_i_i_i_i_generate_error_response(validation_error),
+            NodeClient::_unused_i_i_i_i_i_i_i_generate_error_response(validation_error),
         )
         .expect("Failed to convert error to JSON");
 
@@ -249,30 +248,8 @@ mod tests {
         }
     }
 
-    #[derive(Deserialize, Debug)]
-    #[serde(rename_all(deserialize = "camelCase"))]
-    pub struct CborTestCases {
-        _seed: u64,
-        test_cases: Vec<CborTestCase>,
-    }
-
-    #[derive(Deserialize, Debug)]
-    #[serde(rename_all(deserialize = "camelCase"))]
-    /// A struct representing a CBOR test case.
-    ///
-    /// # Fields
-    ///
-    /// * `cbor` - A string representing the CBOR-encoded error reasons.
-    /// * `haskell_repr` - A string representation of the transaction in Haskell format. This field contains the transaction error as a Haskell string.
-    /// * `json` - A vector of strings representing the errors in JSON format.
-    pub struct CborTestCase {
-        cbor: String,
-        haskell_repr: String,
-        json: Value,
-    }
-
     fn get_file_list_from_folder() -> Vec<String> {
-        let folder_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/cbor");
+        let folder_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/cbor/passing");
 
         let mut path_list = fs::read_dir(folder_path)
             .unwrap()
@@ -305,6 +282,7 @@ mod tests {
 
         let reader = std::io::BufReader::new(file);
 
-        serde_json::from_reader(reader).expect("Failed to parse JSON")
+        serde_json::from_reader(reader)
+            .unwrap_or_else(|_| panic!("Failed to parse JSON from file {}", case_file_path))
     }
 }

@@ -1,15 +1,18 @@
 use pallas_addresses::Address;
 use pallas_codec::minicbor::{self, decode, Decode, Decoder};
-use pallas_primitives::{Bytes, Nullable, ScriptHash};
+use pallas_crypto::hash::Hasher;
 
 use crate::cbor::haskell_types::{
-    ApplyConwayTxPredError, ApplyTxError, ConwayUtxoPredFailure, ConwayUtxoWPredFailure, MultiAsset, PlutusPurpose, ShelleyBasedEra, StrictMaybe, TxValidationError, Utxo
+    ApplyConwayTxPredError, ApplyTxError, ConwayUtxoPredFailure, ConwayUtxoWPredFailure, DatumEnum,
+    MaryValue, MultiAsset, PlutusPurpose, ShelleyBasedEra, StrictMaybe, TxValidationError, Utxo,
 };
 
 use super::{
     haskell_display::HaskellDisplay,
     haskell_types::{
-        BabbageTxOut, ConwayCertPredFailure, ConwayCertsPredFailure, ConwayDelegPredFailure, ConwayGovCertPredFailure, ConwayGovPredFailure, Credential, CustomSet258, DisplayValue, Network, RewardAccountFielded
+        BabbageTxOut, ConwayCertPredFailure, ConwayCertsPredFailure, ConwayDelegPredFailure,
+        ConwayGovCertPredFailure, ConwayGovPredFailure, Credential, CustomSet258, DisplayHash,
+        EraScript, Network, RewardAccountFielded, Timelock, TimelockRaw,
     },
 };
 
@@ -272,35 +275,11 @@ where
     T: Decode<'b, ()> + HaskellDisplay,
 {
     fn decode(d: &mut Decoder<'b>, ctx: &mut ()) -> Result<Self, decode::Error> {
-        let pos = d.position();
         let arr = d.array()?;
-       // d.set_position(pos);
 
-        // d.datatype()?;
-/*
-        match d.datatype()? {
-            minicbor::data::Type::Null => {
-                d.null()?;
-                Ok(Self::Null)
-            }
-            minicbor::data::Type::Undefined => {
-                d.undefined()?;
-                Ok(Self::Undefined)
-            }
-            _ => {
-                let x = d.decode_with(ctx)?;
-                Ok(Self::Some(x))
-            }
-        }
-         */
         match arr {
-            Some(len) if len > 0 => {
-                Ok(StrictMaybe::Just(d.decode_with(ctx)?))
-            }
-            _ => {
-              //  d.skip()?;
-                Ok(StrictMaybe::Nothing)
-            },
+            Some(len) if len > 0 => Ok(StrictMaybe::Just(d.decode_with(ctx)?)),
+            _ => Ok(StrictMaybe::Nothing),
         }
     }
 }
@@ -374,37 +353,57 @@ impl<'b> Decode<'b, ()> for PlutusPurpose {
     }
 }
 
-
 // https://github.com/IntersectMBO/cardano-ledger/blob/ea1d4362226d29ce7e42f4ba83ffeecedd9f0565/eras/babbage/impl/src/Cardano/Ledger/Babbage/TxOut.hs#L484
 impl<'b> Decode<'b, ()> for BabbageTxOut {
     fn decode(d: &mut Decoder<'b>, _ctx: &mut ()) -> Result<Self, decode::Error> {
         let len = d.map()?;
         match len {
-            Some(2) => { 
-                
-                Ok(BabbageTxOut::NotImplemented)
-            },
-            Some(3) => {
-                Ok(BabbageTxOut::NotImplemented)
-            },
+            Some(2) => Ok(BabbageTxOut::NotImplemented),
+            Some(3) => Ok(BabbageTxOut::NotImplemented),
             Some(4) => {
-
                 // key 0
                 d.u8()?;
-                let addr = Address::from_bytes(d.bytes()?).unwrap();
+                let addr: Address = Address::from_bytes(d.bytes()?).unwrap();
 
-                
                 // key 1
                 d.u8()?;
                 d.array()?;
-                let value: DisplayValue = d.decode()?;
-                let multiAsset: MultiAsset = d.decode()?;
+                let value: MaryValue = d.decode()?;
 
-                println!("BabbageTxOut::MaryTxOut: addr: {}, value: {}, multiAsset: {:?}", addr, value, multiAsset);
+                let multi_asset: MultiAsset = d.decode()?;
 
-                Ok(BabbageTxOut::NotImplemented)
-            },
-            None => { // indef map
+                // key 2
+                // datum enum
+                d.u8()?;
+                let datum: DatumEnum = d.decode()?;
+
+                // key 3
+                // inner cbor
+                d.u8()?;
+
+                d.tag()?;
+                let inner_cbor_bytes = d.bytes()?;
+                // let inner_cbor = hex::encode(bytes);
+                let era_script = minicbor::decode::<EraScript>(inner_cbor_bytes)?;
+
+                println!(
+                    "BabbageTxOut::MaryTxOut: addr: {} ",
+                    multi_asset.to_haskell_str()
+                );
+
+                // println!("BabbageTxOut::MaryTxOut: addr: {}, value: {}, multiAsset: {}, datum: {:?}, era_script: {:?}", addr, value, multiAsset.to_haskell_str(), datum, era_script);
+
+                // Ok(BabbageTxOut::NotImplemented)
+
+                Ok(BabbageTxOut::TxOutCompactRefScript(
+                    addr,
+                    (value, multi_asset),
+                    datum,
+                    StrictMaybe::Just(era_script),
+                ))
+            }
+            None => {
+                // indef map
                 Ok(BabbageTxOut::NotImplemented)
             }
             _ => Err(decode::Error::message(format!(
@@ -412,7 +411,78 @@ impl<'b> Decode<'b, ()> for BabbageTxOut {
                 len.unwrap_or(0)
             ))),
         }
-       
+    }
+}
+
+// not tested yet
+impl<'b> Decode<'b, ()> for EraScript {
+    fn decode(d: &mut Decoder<'b>, _ctx: &mut ()) -> Result<Self, decode::Error> {
+        d.array()?;
+        let tag = d.u16()?;
+
+        match tag {
+            0 => Ok(EraScript::Native(d.decode()?)),
+            1 => Ok(EraScript::PlutusV1(d.decode()?)),
+            2 => Ok(EraScript::PlutusV2(d.decode()?)),
+            3 => Ok(EraScript::PlutusV3(d.decode()?)),
+            _ => Err(decode::Error::message(format!(
+                "unknown index while decoding EraScript: {}",
+                tag
+            ))),
+        }
+    }
+}
+
+// not tested yet
+impl<'b> Decode<'b, ()> for TimelockRaw {
+    fn decode(d: &mut Decoder<'b>, _ctx: &mut ()) -> Result<Self, decode::Error> {
+        d.array()?;
+        let tag = d.u16()?;
+
+        use TimelockRaw::*;
+        match tag {
+            0 => Ok(Signature(d.decode()?)),
+            1 => Ok(AllOf(d.decode()?)),
+            2 => Ok(AnyOf(d.decode()?)),
+            3 => Ok(MOfN(d.decode()?, d.decode()?)),
+            4 => Ok(TimeStart(d.decode()?)),
+            5 => Ok(TimeExpire(d.decode()?)),
+            _ => Err(decode::Error::message(format!(
+                "unknown index while decoding Timelock: {}",
+                tag
+            ))),
+        }
+    }
+}
+
+// not tested yet
+impl<'b> Decode<'b, ()> for Timelock {
+    fn decode(d: &mut Decoder<'b>, _ctx: &mut ()) -> Result<Self, decode::Error> {
+        let first = d.position();
+
+        let raw: TimelockRaw = d.decode()?;
+        let last = d.position();
+        let input = d.input();
+        let raw_bytes = &input[first..last];
+
+        let mut hasher = Hasher::<256>::new();
+        hasher.input(raw_bytes);
+        let memo = DisplayHash(hasher.finalize());
+        Ok(Timelock { raw, memo })
+    }
+}
+
+// not tested yet
+impl<'b> Decode<'b, ()> for DatumEnum {
+    fn decode(d: &mut Decoder<'b>, _ctx: &mut ()) -> Result<Self, decode::Error> {
+        d.array()?;
+        let tag = d.u16()?;
+
+        match tag {
+            0 => Ok(DatumEnum::DatumHash(d.decode()?)),
+            1 => Ok(DatumEnum::Datum(d.decode()?)),
+            _ => Ok(DatumEnum::NoDatum),
+        }
     }
 }
 
@@ -430,7 +500,7 @@ where
     T: Decode<'b, ()>,
 {
     fn decode(d: &mut Decoder<'b>, _ctx: &mut ()) -> Result<Self, decode::Error> {
-        let tag = d.tag()?; // we are ignoring the unknown tag 258 here
+        let _tag = d.tag()?; // we are ignoring the tag 258 here
         Ok(CustomSet258(d.decode()?))
     }
 }

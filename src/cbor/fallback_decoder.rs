@@ -2,7 +2,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::process as proc;
 use std::sync::{
     atomic::{self, AtomicU32},
-    Arc, LazyLock,
+    Arc,
 };
 use std::thread;
 use tokio::sync::{mpsc, oneshot};
@@ -290,7 +290,8 @@ fn partition_result<A, E>(ae: Result<A, E>) -> (Result<A, ()>, Result<(), E>) {
 }
 
 #[cfg(test)]
-static GLOBAL_INSTANCE: LazyLock<FallbackDecoder> = LazyLock::new(FallbackDecoder::spawn);
+static GLOBAL_INSTANCE: std::sync::LazyLock<FallbackDecoder> =
+    std::sync::LazyLock::new(FallbackDecoder::spawn);
 
 #[cfg(test)]
 mod tests {
