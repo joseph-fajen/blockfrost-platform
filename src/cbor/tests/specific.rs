@@ -506,7 +506,6 @@ async fn test_cbor_0075_ConwayTreasuryValueMismatch_Coin_Coin_ConwayCertsFailure
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0076_ConwayMempoolFailure_ConwayUtxowFailure_NotAllowedSupplementalDatums_List()
 {
@@ -514,35 +513,30 @@ async fn test_cbor_0076_ConwayMempoolFailure_ConwayUtxowFailure_NotAllowedSupple
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0077_ConwayMempoolFailure_SO() {
     verify_one("818206818207610e").await
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0078_ConwayMempoolFailure() {
     verify_one("81820681820760").await
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0079_ConwayTreasuryValueMismatch_Coin_Coin_ConwayGovFailure() {
     verify_one("8182068283051a0004964e1a000c916982038207a0").await
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0080_ConwayMempoolFailure_ConwayTxRefScriptsSizeTooBig() {
     verify_one("8182068282076083062001").await
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0081_ConwayMempoolFailure_ConwayCertsFailure_WithdrawalsNotInRewardsCERTS_List()
 {
@@ -550,21 +544,18 @@ async fn test_cbor_0081_ConwayMempoolFailure_ConwayCertsFailure_WithdrawalsNotIn
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0082_ConwayMempoolFailure_S() {
     verify_one("8182068182076153").await
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0083_ConwayGovFailure_ExpirationEpochTooSmall_List_ConwayGovFailure() {
     verify_one("8182068282038207a08203820e818202581cd6d123ba0dd693a89694142a35714bc5b44f80a23ce66f4674808baf").await
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0084_ConwayCertsFailure_CertFailure_GovCertFailure_ConwayCommitteeIsUnknown() {
     verify_one(
@@ -574,98 +565,84 @@ async fn test_cbor_0084_ConwayCertsFailure_CertFailure_GovCertFailure_ConwayComm
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0085_ConwayTreasuryValueMismatch_Coin_Coin() {
     verify_one("8182068183051a0006297c1a000456b4").await
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0086_ConwayUtxowFailure_UtxoFailure_OutputTooSmallUTxO_Addr() {
     verify_one("8182068182018200820981a400583931b2d82464ee0f01a997469f62bfd2f86e2b81e2d6b57f32c76f15ee65470d8980522f46457bd0238fb07a7a86a488a78b595e013f9aea9d5601821b229f5c403dc6c2e3a1581cb0c53e2bf180858da4b64eb5598c5615bba7d723d2b604a83b7f9165a141351b1567a03e35825e8c02820058204cd8ff721542ba2426af9d0fa46638f60559d368b7d2fe4d1651c63e28327f4803d818584e82008303008283030181830301818200581cabde7a6c2f96943f3d0258dbb7ac1fc8769230b7c2b1a42e6aa10d758200581c8eab33aa0947bb8fff0df44cf26fe832ed82105a10ade2cb819ca68b").await
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0087_ConwayMempoolFailure_ConwayMempoolFailure() {
     verify_one("8182068282076168820760").await
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0088_ConwayWdrlNotDelegatedToDRep_KeyHash_KeyHash_KeyHash() {
     verify_one("81820681820482581cf1d0ecac93ac1a4aa5dad924d9390424114baa9cc07417a67c648f06581c12749381aef4f99e67b5f6237fa797f3e0910a2f0eed50625b8c6753").await
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0089_ConwayWdrlNotDelegatedToDRep_KeyHash_KeyHash() {
     verify_one("81820681820481581c5a6cf4280e7f2704e01ba558a5e2b329e8e8c240564ecac077d16b52").await
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0090_ConwayGovFailure_GovActionsDoNotExist_GovActionId_TxId() {
     verify_one("8182068182038200828258206d3a5b92857fd4ec3de160e62f194525286882ef073e27c4aa6e3e21f33e0dc100825820e015c9d455993f68e65ce4201f19ef00e24807b686682f1f0248b50d3369dcdf00").await
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0091_ConwayGovFailure_InvalidPrevGovActionId_ProposalProcedure_ProcDeposit() {
     verify_one("8182068182038208841a000c62e0581df11901d1a388e141decd73a9d866e8b345e628a725fc1446692052172c8400f6b818001a00056731011a000f1ff1020003010401051a000d28b2061a0006cc6f0701080009d81e821b0004a0e77a55d1891b000000012a05f2000ad81e821b00033ee519c0683d1b00038d7ea4c68000111a000cad301382d81e821b45cf3fc2ad19fb0b1b016345785d8a0000d81e821b00848874675c52fd1a000186a015821b27aeb4e29a22e1ff1b43ef678ea318e38316011701181801181985d81e820001d81e821b00022b0ac69461e71b0008e1bc9bf04000d81e821b00004f99d4554e731b00005af3107a4000d81e82190a2f191388d81e821b0000c0e0a2bebdf91b00038d7ea4c68000181a8ad81e821b0000000163fdad471b00000002540be400d81e821b00037889c53344c91b00038d7ea4c68000d81e8219aaf119c350d81e821b06991bf4e85f844d1b06f05b59d3b20000d81e821a011e79ff1a05f5e100d81e821a000785071a004c4b40d81e821b05b25cbd3ce69b111b0de0b6b3a7640000d81e821b000000185b7e3c491b00000048c2739500d81e821902931903e8d81e821a0106631f1a05f5e100181c01181e19b84c181f1a000e36061820001821d81e821b189d306e53f85d3d1819f6826e68747470733a2f2f31512e636f6d58202fa17b7ce34cc8670e9448b2b1b39b1d6262b9ec23abea0df5e61b41a88d55d8").await
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0092_ConwayWdrlNotDelegatedToDRep_KeyHash_KeyHash_KeyHash() {
     verify_one("81820682820482581c79eafef623f0826d947fefee02b033714530053fe318529dc9f1d92a581cda3bd010fea70e217b9859095390abaffc75e6d31c8e87409bafce5c82018210d9010280").await
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0093_ConwayGovFailure_ZeroTreasuryWithdrawals_NoConfidence_SJust() {
     verify_one("818206818203820f8203825820bce7857d66684c376526dd9431a81b9a456fbcc26064c56c43efa05e4e99440101").await
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0094_ConwayTxRefScriptsSizeTooBig() {
     verify_one("8182068183060101").await
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0095_ConwayUtxowFailure_NotAllowedSupplementalDatums_List_SafeHash() {
     verify_one("818206828201830cd901028158203c44228aea5f895b5acd0a677dabae4923d6ea1dad941c2f04e9e17fe88a98dbd901028158206f13d3fa99ccd62b8fd11c0d15d2a0b0d64d923e867d65bdcb9b740dd101664b820481581c2476e78bd0a862d6ef3de2a178d1f4f079bd2ac0ce4731a8bb3933b9").await
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0096_ConwayTreasuryValueMismatch_Coin_Coin() {
     verify_one("8182068183051a000a9c7c1a000f37b5").await
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0097_ConwayWdrlNotDelegatedToDRep_KeyHash_KeyHash_KeyHash() {
     verify_one("81820681820482581cce3e13a895ca723a377b52b880ede8d822b34fc497f7add6df50d8d4581ce1c21d6ecb67e54622923d5db2a600a9a53f6a5eec1878a0118838e0").await
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0098_ConwayWdrlNotDelegatedToDRep_KeyHash_KeyHash_ConwayMempoolFailure() {
     verify_one("81820682820481581c4c74aac383eae519dca60a0dade59b7f37bb4fd57ba0cb5a2908f86682076174")
@@ -673,14 +650,12 @@ async fn test_cbor_0098_ConwayWdrlNotDelegatedToDRep_KeyHash_KeyHash_ConwayMempo
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0099_ConwayWdrlNotDelegatedToDRep_KeyHash_KeyHash() {
     verify_one("81820681820481581c9b13cae8380b05cf14ce9744ee556118ce6e244500732bf7ccf9d2b6").await
 }
 
 #[tokio::test]
-#[ignore]
 #[allow(non_snake_case)]
 async fn test_cbor_0100_ConwayUtxowFailure_InvalidMetadata_ConwayGovFailure_DisallowedProposalDuringBootstrap(
 ) {
